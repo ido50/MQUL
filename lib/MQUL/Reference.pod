@@ -295,7 +295,199 @@ attribute with a value larger than 7, and a 'title' attribute with either
 
 =head1 UPDATE STRUCTURES
 
+Update structures are used to modify the attributes of documents. The keys
+of an update structure are modifiers, and their values are hash-references.
+These hash-refs have one or more attributes as keys, and the actual
+modifications as the values.
 
+Let's look at a simple example:
+
+	{ '$inc' => { number => 3 } }
+
+This update structure uses the C<$inc> update modifier, and it tells MQUL
+to increase the value of the 'number' attribute by three.
+
+The following update modifiers are supported:
+
+=over
+
+=item * C<$inc>
+
+Used to increase the value of attributes by a certain amount. This can
+also be used to decrease the attribute, by giving it a negative value.
+
+	{ '$inc' => { to_increase => 2, to_decrease => -2 } }
+
+This will increase 'to_increase' by two and decrease 'to_decrease' by two.
+
+=item * C<$set>
+
+This modifier is used to change the value of an attribute. This is pretty
+simple, and you can give an attribute whatever valu eyou want - scalars,
+data structures, whatever.
+
+	{
+		'$set' => {
+			title => 'Freaks and Geaks',
+			genre => [qw/comedy drama/],
+		},
+	}
+
+Given the following document:
+
+	{
+		title => 'Death Note',
+		genre => [qw/anime thriller/],
+		imdb_score => 10,
+	}
+
+Using the update structure on it will yield the following revised document:
+
+	{
+		title => 'Freaks and Geaks',
+		genre => qw[/comedy drama/],
+		imdb_score => 10,
+	}
+
+=item * C<$unset>
+
+This modifier is used to remove an attribute (or attributes) from a
+document.
+
+	{ '$unset' => { imdb_score => 1 } }
+
+Will cause the following document:
+
+	{
+		title => 'Freaks and Geaks',
+		genre => qw[/comedy drama/],
+		imdb_score => 9.4,
+	}
+
+To turn into this document:
+
+	{
+		title => 'Freaks and Geaks',
+		genre => qw[/comedy drama/],
+	}
+
+=item * C<$rename>
+
+This is used to rename an attribute.
+
+	{ '$rename' => { old_name => 'new_name' } }
+
+So if a document had an attribute called 'old_name', after the update the
+attribute will be called 'new_name', but the same value will be retained.
+
+=item * C<$push>
+
+This is used to push a certain value to the end of an attribute that holds
+an array.
+
+	{ '$push' => { tags => 'romance' } }
+
+So, if a document had an attribute called 'tags' with the value C<['comedy', 'drama']>,
+after the update 'tags' will be C<['comedy', 'drama', 'romance']>.
+
+=item * C<$pushAll>
+
+The same as C<$push>, but used to push multiple values at once.
+
+	{ '$pushAll' => { tags => [qw/romance chick_flick/] } }
+
+=item * C<$addToSet>
+
+The same as C<$push>, but will only push the value to an array attribute
+if it's not already in the array.
+
+	{ '$addToSet' => { tags => 'comedy' } }
+
+This won't do anything for the following document:
+
+	{
+		title => 'Freaks and Geeks',
+		tags => [qw/comedy drama/],
+	}
+
+C<$addToSet> can also take arrays of values, like C<$pushAll> does.
+
+	{ '$addToSet' => { tags => [qw/romance chick_flick/] } }
+
+=item * C<$pop>
+
+This modifier will remove the last item in an array attribute.
+
+	{ '$pop' => { tags => 1 } }
+
+Note that the value you give to the attribute you're modifying (1 in the
+above example) doesn't matter, only one item will be removed, but you
+must give a true value, otherwise nothing will happen.
+
+=item * C<$shift>
+
+This modifier will remove the first item in an array attribute. The same
+note given to C<$pop> above holds true for C<$shift> as well.
+
+=item * C<$splice>
+
+This modifier is used to remove a specific range of indexes from an array
+attribute.
+
+	{ '$splice' => { tags => [3, 2] } }
+
+This will remove two items from the 'tags' array, starting at offset 3
+(take a look at Perl's C<splice()> function for more info).
+
+=item * C<$pull>
+
+This is used to remove a specific value from an array attribute.
+
+	{ '$pull' => { tags => 'comedy' } }
+
+This will remove 'comedy' from the 'tags' attribute, if it has it.
+
+=item * C<$pullAll>
+
+The same as C<$pull>, but used for pulling multiple values at once.
+
+	{ '$pullAll' => { tags => [qw/comedy drama/] } }
+
+=back
+
+=head1 NOTABLE DIFFERENCES FROM MONGODB
+
+=head2 QUERIES
+
+=over
+
+=item 1. The C<$nor> constraint is not supported (yet).
+
+=item 2. The C<$elemMatch> construct is not supported (yet).
+
+=item 3. The C<$not> meta operator is not supported (yet).
+
+=item 4. The C<$where> construct is not supported (and probably never will be).
+
+=item 5. The direct equality constraint can also compare complex data structures in MQUL. See L</"THE EQUALITY CONSTRAINT">.
+
+=item 6. The dot notation, for querying sub-attributes, is not supported (yet).
+
+=item 7. The C<$type> operator has a complete different structure. See L</"THE TYPE CONSTRAINT">.
+
+=back
+
+=head2 UPDATES
+
+=over
+
+=item 1. The C<$bit> modifier is not supported (yet).
+
+=item 2. The C<$> positional operator is not supported (and I don't think it will be).
+
+=item 3. The dot notation, for updating sub-attributes, is not supported (yet).
+
+=back
 
 =head1 AUTHOR
 

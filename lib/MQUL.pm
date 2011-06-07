@@ -379,7 +379,10 @@ sub _value_in {
 
 Receives a document hash-ref and an update hash-ref, and updates the
 document in-place according to the update hash-ref. Also returns the document
-after the update.
+after the update. If the update hash-ref doesn't have any of the update
+modifiers described by the language, then the update hash-ref is considered
+as what the document should now be, and so will simply replace the document
+hash-ref.
 
 See L<MQUL::Reference/"UPDATE STRUCTURE"> to learn about the structure of
 update hash-refs.

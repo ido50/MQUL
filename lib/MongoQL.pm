@@ -9,7 +9,6 @@ BEGIN {
 
 use warnings;
 use strict;
-
 use Carp;
 use Data::Compare;
 use Data::Types qw/:is/;
@@ -88,126 +87,6 @@ sub doc_matches {
 
 	# if we've reached here, the document matches, so return true
 	return 1;
-}
-
-=head2 update_doc( \%document, \%update )
-
-=cut
-
-sub update_doc {
-	my ($doc, $obj) = @_;
-
-	croak "MongoQL::update_doc() requires a document hash-ref."
-		unless defined $doc && ref $doc && ref $doc eq 'HASH';
-	croak "MongoQL::update_doc() requires an update hash-ref."
-		unless defined $obj && ref $obj && ref $obj eq 'HASH';
-
-	# we only need to do something if the $obj hash-ref has any advanced
-	# update operations, otherwise $obj is meant to be the new $doc
-
-	if (&_has_adv_upd($obj)) {
-		foreach my $op (keys %$obj) {
-			next if $_ eq '_name';
-			if ($op eq '$inc') {
-				# increase numerically
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					$doc->{$field} ||= 0;
-					$doc->{$field} += $obj->{$op}->{$field};
-				}
-			} elsif ($op eq '$set') {
-				# set key-value pairs
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					$doc->{$field} = $obj->{$op}->{$field};
-				}
-			} elsif ($op eq '$unset') {
-				# remove key-value pairs
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					delete $doc->{$field} if $obj->{$op}->{$field};
-				}
-			} elsif ($op eq '$push') {
-				# push values to end of arrays
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					croak "The $field attribute is not an array in $doc->{_name}."
-						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
-					$doc->{$field} ||= [];
-					push(@{$doc->{$field}}, $obj->{$op}->{$field});
-				}
-			} elsif ($op eq '$pushAll') {
-				# push a list of values to end of arrays
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					croak "The $field attribute is not an array in $doc->{_name}."
-						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
-					$doc->{$field} ||= [];
-					push(@{$doc->{$field}}, @{$obj->{$op}->{$field}});
-				}
-			} elsif ($op eq '$addToSet') {
-				# push values to arrays only if they're not already there
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					croak "The $field attribute is not an array in $doc->{_name}."
-						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
-					$doc->{$field} ||= [];
-					push(@{$doc->{$field}}, $obj->{$op}->{$field})
-						unless defined &_index_of($obj->{$op}->{$field}, $doc->{$field});
-				}
-			} elsif ($op eq '$pop') {
-				# pop values from arrays
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					croak "The $field attribute is not an array in $doc->{_name}."
-						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
-					$doc->{$field} ||= [];
-					splice(@{$doc->{$field}}, $obj->{$op}->{$field}, 1);
-				}
-			} elsif ($op eq '$rename') {
-				# rename attributes
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					$doc->{$obj->{$op}->{$field}} = delete $doc->{$field}
-						if exists $doc->{$field};
-				}
-			} elsif ($op eq '$pull') {
-				# remove values from arrays
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					croak "The $field attribute is not an array in $doc->{_name}."
-						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
-					$doc->{$field} ||= [];
-					my $i = &_index_of($obj->{$op}->{$field}, $doc->{$field});
-					while (defined $i) {
-						splice(@{$doc->{$field}}, $i, 1);
-						$i = &_index_of($obj->{$op}->{$field}, $doc->{$field});
-					}
-				}
-			} elsif ($op eq '$pullAll') {
-				# remove a list of values from arrays
-				next unless ref $obj->{$op} eq 'HASH';
-				foreach my $field (keys %{$obj->{$op}}) {
-					croak "The $field attribute is not an array in $doc->{_name}."
-						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
-					$doc->{$field} ||= [];
-					foreach my $value (@{$obj->{$op}->{$field}}) {
-						my $i = &_index_of($value, $doc->{$field});
-						while (defined $i) {
-							splice(@{$doc->{$field}}, $i, 1);
-							$i = &_index_of($value, $doc->{$field});
-						}
-					}
-				}
-			}
-		}
-	} else {
-		# $obj is actually the new $doc
-		foreach (keys %$obj) {
-			next if $_ eq '_name';
-			$doc->{$_} = $obj->{$_};
-		}
-	}
 }
 
 sub _attribute_matches {
@@ -434,6 +313,132 @@ sub _has_adv_upd {
 	return;
 }
 
+
+
+=head2 update_doc( \%document, \%update )
+
+=cut
+
+sub update_doc {
+	my ($doc, $obj) = @_;
+
+	croak "MongoQL::update_doc() requires a document hash-ref."
+		unless defined $doc && ref $doc && ref $doc eq 'HASH';
+	croak "MongoQL::update_doc() requires an update hash-ref."
+		unless defined $obj && ref $obj && ref $obj eq 'HASH';
+
+	# we only need to do something if the $obj hash-ref has any advanced
+	# update operations, otherwise $obj is meant to be the new $doc
+
+	if (&_has_adv_upd($obj)) {
+		foreach my $op (keys %$obj) {
+			if ($op eq '$inc') {
+				# increase numerically
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					$doc->{$field} ||= 0;
+					$doc->{$field} += $obj->{$op}->{$field};
+				}
+			} elsif ($op eq '$set') {
+				# set key-value pairs
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					$doc->{$field} = $obj->{$op}->{$field};
+				}
+			} elsif ($op eq '$unset') {
+				# remove key-value pairs
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					delete $doc->{$field} if $obj->{$op}->{$field};
+				}
+			} elsif ($op eq '$rename') {
+				# rename attributes
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					$doc->{$obj->{$op}->{$field}} = delete $doc->{$field}
+						if exists $doc->{$field};
+				}
+			} elsif ($op eq '$push') {
+				# push values to end of arrays
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					push(@{$doc->{$field}}, $obj->{$op}->{$field});
+				}
+			} elsif ($op eq '$pushAll') {
+				# push a list of values to end of arrays
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					push(@{$doc->{$field}}, @{$obj->{$op}->{$field}});
+				}
+			} elsif ($op eq '$addToSet') {
+				# push values to arrays only if they're not already there
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					my @add = ref $obj->{$op}->{$field} && ref $obj->{$op}->{$field} eq 'ARRAY' ? @{$obj->{$op}->{$field}} : ($obj->{$op}->{$field});
+					foreach my $val (@add) {
+						push(@{$doc->{$field}}, $val)
+							unless defined &_index_of($val, $doc->{$field});
+					}
+				}
+			} elsif ($op eq '$pop') {
+				# pop values from arrays
+				next unless ref $obj->{$op} eq 'HASH';
+				use Data::Dumper;
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					print STDERR "WAS: ", Dumper($doc->{$field});
+					splice(@{$doc->{$field}}, $obj->{$op}->{$field}, 1);
+					print STDERR "NOW: ", Dumper($doc->{$field});
+				}
+			} elsif ($op eq '$pull') {
+				# remove values from arrays
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					my $i = &_index_of($obj->{$op}->{$field}, $doc->{$field});
+					while (defined $i) {
+						splice(@{$doc->{$field}}, $i, 1);
+						$i = &_index_of($obj->{$op}->{$field}, $doc->{$field});
+					}
+				}
+			} elsif ($op eq '$pullAll') {
+				# remove a list of values from arrays
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					foreach my $value (@{$obj->{$op}->{$field}}) {
+						my $i = &_index_of($value, $doc->{$field});
+						while (defined $i) {
+							splice(@{$doc->{$field}}, $i, 1);
+							$i = &_index_of($value, $doc->{$field});
+						}
+					}
+				}
+			}
+		}
+	} else {
+		# $obj is actually the new $doc
+		%$doc = %$obj;
+	}
+
+	return $doc;
+}
+
 =head2 _index_of( $value, \@array )
 
 Returns the index of C<$value> in the array reference, if it exists there,
@@ -445,10 +450,11 @@ sub _index_of {
 	my ($value, $array) = @_;
 
 	for (my $i = 0; $i < scalar @$array; $i++) {
-		next if is_float($array->[$i]) && !is_float($value);
-		next if !is_float($array->[$i]) && is_float($value);
-		return $i if is_float($array->[$i]) && $value == $array->[$i];
-		return $i if is_float($array->[$i]) && $value eq $array->[$i];
+		if (is_float($array->[$i]) && is_float($value)) {
+			return $i if $array->[$i] == $value;
+		} else {
+			return $i if $array->[$i] eq $value;
+		}
 	}
 
 	return;

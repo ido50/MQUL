@@ -1,28 +1,28 @@
 #!perl -T
 
-use Test::More;
-use MongoQL qw/update_doc/;
+use Test::More tests => 20;
+use MQUL qw/update_doc/;
 use Try::Tiny;
 
 # start by making sure doc_matches() fails when it needs to:
 my $err = try { update_doc() } catch { (m/(.+) at t\/02-updating.t/)[0] };
-is($err, 'MongoQL::update_doc() requires a document hash-ref.', 'update_doc() fails when nothing is given.');
+is($err, 'MQUL::update_doc() requires a document hash-ref.', 'update_doc() fails when nothing is given.');
 undef $err;
 
 $err = try { update_doc('asdf') } catch { (m/(.+) at t\/02-updating.t/)[0] };
-is($err, 'MongoQL::update_doc() requires a document hash-ref.', 'update_doc() fails when a scalar is given for a document.');
+is($err, 'MQUL::update_doc() requires a document hash-ref.', 'update_doc() fails when a scalar is given for a document.');
 undef $err;
 
 $err = try { update_doc([1,2,3]) } catch { (m/(.+) at t\/02-updating.t/)[0] };
-is($err, 'MongoQL::update_doc() requires a document hash-ref.', 'update_doc() fails when a non-hash reference is given for a document.');
+is($err, 'MQUL::update_doc() requires a document hash-ref.', 'update_doc() fails when a non-hash reference is given for a document.');
 undef $err;
 
 $err = try { update_doc({ asdf => 1 }) } catch { (m/(.+) at t\/02-updating.t/)[0] };
-is($err, 'MongoQL::update_doc() requires an update hash-ref.', 'update_doc() fails when no update hash-ref is given.');
+is($err, 'MQUL::update_doc() requires an update hash-ref.', 'update_doc() fails when no update hash-ref is given.');
 undef $err;
 
 $err = try { update_doc({ asdf => 1 }, [1,2,3]) } catch { (m/(.+) at t\/02-updating.t/)[0] };
-is($err, 'MongoQL::update_doc() requires an update hash-ref.', 'update_doc() fails when a non-hash reference is given for the update.');
+is($err, 'MQUL::update_doc() requires an update hash-ref.', 'update_doc() fails when a non-hash reference is given for the update.');
 undef $err;
 
 # let's make sure that when the update hash-ref has no advanced operators
@@ -53,14 +53,48 @@ is_deeply(update_doc({ array => [qw/one two three/] }, { '$addToSet' => { array 
 is_deeply(update_doc({ array => [qw/one two three/] }, { '$addToSet' => { array => [qw/two four six/] } }), { array => [qw/one two three four six/] }, '$addToSet works');
 
 # 9. $pop
-is_deeply(update_doc({ array => [1 .. 5] }, { '$pop' => { array => 1 } }), { array => [2 .. 5] }, '$pop #1 works');
-is_deeply(update_doc({ array => [1 .. 5] }, { '$pop' => { array => -1 } }), { array => [1 .. 4] }, '$pop #2 works');
-is_deeply(update_doc({ array => [1 .. 5] }, { '$pop' => { array => 2 } }), { array => [1,2,4,5] }, '$pop  #3 works');
+is_deeply(update_doc({ array => [1 .. 5] }, { '$pop' => { array => 1 } }), { array => [1 .. 4] }, '$pop works');
 
-# 10. $pull
+# 10. $unshift
+is_deeply(update_doc({ array => [1 .. 5] }, { '$shift' => { array => 1 } }), { array => [2 .. 5] }, '$shift works');
+
+# 11. $splice
+is_deeply(update_doc({ array => [1 .. 5] }, { '$splice' => { array => [2, 2] } }), { array => [1,2,5] }, '$splice works');
+
+# 12. $pull
 is_deeply(update_doc({ array => [qw/sex drugs rocknroll/] }, { '$pull' => { array => 'sex' } }), { array => [qw/drugs rocknroll/] }, '$pull works');
 
-# 11. $pullAll
+# 13. $pullAll
 is_deeply(update_doc({ array => [qw/sex drugs rocknroll/] }, { '$pullAll' => { array => [qw/sex drugs/] } }), { array => [qw/rocknroll/] }, '$pullAll works');
+
+# let's try some complex updates
+is_deeply(update_doc({
+	type => 'blog',
+	name => 'vlog',
+	tags => [qw/sex drugs rocknroll/],
+	members => {
+		ido => 'admin',
+		moses => 'leader',
+		jesus => 'savior',
+		misus => 'wife',
+	},
+	score => 8.5,
+}, {
+	'$set' => { type => 'wiki' },
+	'$unset' => { name => 1 },
+	'$pop' => { tags => 1 },
+	'$pull' => { tags => 'drugs' },
+	'$inc' => { score => -1 },
+}), {
+	type => 'wiki',
+	tags => [qw/sex/],
+	members => {
+		ido => 'admin',
+		moses => 'leader',
+		jesus => 'savior',
+		misus => 'wife',
+	},
+	score => 7.5,
+}, 'complex #1 works');
 
 done_testing();

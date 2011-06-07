@@ -1,28 +1,28 @@
 #!perl -T
 
-use Test::More tests => 57;
-use MongoQL qw/doc_matches/;
+use Test::More tests => 68;
+use MQUL qw/doc_matches/;
 use Try::Tiny;
 
 # start by making sure doc_matches() fails when it needs to:
 my $err = try { doc_matches() } catch { (m/(.+) at t\/01-querying.t/)[0] };
-is($err, 'MongoQL::doc_matches() requires a document hash-ref.', 'doc_matches() fails when no document is given.');
+is($err, 'MQUL::doc_matches() requires a document hash-ref.', 'doc_matches() fails when no document is given.');
 undef $err;
 
 $err = try { doc_matches('asdf') } catch { (m/(.+) at t\/01-querying.t/)[0] };
-is($err, 'MongoQL::doc_matches() requires a document hash-ref.', 'doc_matches() fails when a scalar is given for a document.');
+is($err, 'MQUL::doc_matches() requires a document hash-ref.', 'doc_matches() fails when a scalar is given for a document.');
 undef $err;
 
 $err = try { doc_matches([1,2,3]) } catch { (m/(.+) at t\/01-querying.t/)[0] };
-is($err, 'MongoQL::doc_matches() requires a document hash-ref.', 'doc_matches() fails when a non-hash reference is given for a document.');
+is($err, 'MQUL::doc_matches() requires a document hash-ref.', 'doc_matches() fails when a non-hash reference is given for a document.');
 undef $err;
 
 $err = try { doc_matches({ asdf => 1 }, 1) } catch { (m/(.+) at t\/01-querying.t/)[0] };
-is($err, 'MongoQL::doc_matches() expects a query hash-ref.', 'doc_matches() fails when a scalar is given for the query.');
+is($err, 'MQUL::doc_matches() expects a query hash-ref.', 'doc_matches() fails when a scalar is given for the query.');
 undef $err;
 
 $err = try { doc_matches({ asdf => 1 }, [1,2,3]) } catch { (m/(.+) at t\/01-querying.t/)[0] };
-is($err, 'MongoQL::doc_matches() expects a query hash-ref.', 'doc_matches() fails when a non-hash reference is given for the query.');
+is($err, 'MQUL::doc_matches() expects a query hash-ref.', 'doc_matches() fails when a non-hash reference is given for the query.');
 undef $err;
 
 # let's make sure every document will match an empty query
@@ -34,6 +34,11 @@ ok(doc_matches({ string => 'yo yo', integer => 123 }, { string => 'yo yo' }), 's
 ok(!doc_matches({ string => 'my name is nobody' }, { string => 'yo yo' }), 'simple equality does not match erroneously');
 ok(doc_matches({ string => 'my name is nobody' }, { string => qr/nobody$/ }), 'simple regex works');
 ok(!doc_matches({ string => 'yo yo' }, { string => qr/nobody$/ }), 'simple regex does not match erroneously');
+
+# let's see if deep equality works
+ok(doc_matches({ hash => { one => 1, two => 2 }, array => [1,2,3] }, { hash => { one => 1, two => 2 } }), 'deep hash equality works');
+ok(doc_matches({ hash => { one => 1, two => 2 }, array => [1,2,3] }, { array => [1,2,3] }), 'deep array equality works');
+ok(doc_matches({ deep_hash => { nest => { bird => 'and stuff' } }, number => 123 }, { number => 123, deep_hash => { nest => { bird => 'and stuff' } } }), 'really deep hash works');
 
 # now let's take a look at non-equality and $eq-style equality
 ok(doc_matches({ should_eq => 'clint', should_not_eq => 'westwood' }, { should_eq => { '$eq' => 'clint' }, should_not_eq => { '$ne' => 'eastwood' } }), 'simple non-equality works');
@@ -134,5 +139,42 @@ ok(doc_matches({
 	members => { '$type' => 'hash' },
 	score => { '$gte' => 7, '$mod' => [5, 3] },
 }), 'complex #3 okay');
+
+# let's try some $or queries
+ok(doc_matches({ title => 'Freaks and Geeks' }, { '$or' => [ { title => 'Freaks and Geeks' }, { title => 'Undeclared' } ] }), '$or #1 works');
+ok(!doc_matches({ title => 'How I Met Your Mother' }, { '$or' => [ { title => 'Freaks and Geeks' }, { title => 'Undeclared' } ] }), '$or #2 works');
+ok(doc_matches({ one => 1 }, { '$or' => [ { one => { '$exists' => 1 } }, { two => { '$exists' => 1 } } ] }), '$or #3 works');
+ok(doc_matches({ two => 2 }, { '$or' => [ { one => { '$exists' => 1 } }, { two => { '$exists' => 1 } } ] }), '$or #4 works');
+ok(!doc_matches({ three => 3 }, { '$or' => [ { one => { '$exists' => 1 } }, { two => { '$exists' => 1 } } ] }), '$or #5 works');
+ok(doc_matches({
+	year => 2010,
+	genre => 'comedy',
+}, {
+	year => { '$gt' => 2000 },
+	'$or' => [
+		{ genre => 'comedy' },
+		{ genre => 'drama' },
+	],
+}), 'or #6 works');
+ok(!doc_matches({
+	year => 2010,
+	genre => 'mystery',
+}, {
+	year => { '$gt' => 2000 },
+	'$or' => [
+		{ genre => 'comedy' },
+		{ genre => 'drama' },
+	],
+}), 'or #7 works');
+ok(!doc_matches({
+	year => 1990,
+	genre => 'comedy',
+}, {
+	year => { '$gt' => 2000 },
+	'$or' => [
+		{ genre => 'comedy' },
+		{ genre => 'drama' },
+	],
+}), 'or #8 works');
 
 done_testing();

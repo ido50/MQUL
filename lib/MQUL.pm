@@ -1,6 +1,6 @@
-package MongoQL;
+package MQUL;
 
-# ABSTRACT: MongoDB-style query and update language for any purpose
+# ABSTRACT: General purpose, MongoDB-style query and update language
 
 BEGIN {
 	use Exporter 'import';
@@ -21,41 +21,94 @@ $VERSION = eval $VERSION;
 
 =head1 NAME
 
-MongoQL - MongoDB-style query and update language for any purpose
+MQUL - General purpose, MongoDB-style query and update language
 
 =head1 SYNOPSIS
 
-	use MongoQL qw/doc_matches update_doc/;
+	use MQUL qw/doc_matches update_doc/;
 
-=for author to fill in:
-    Brief code example(s) here showing commonest usage(s).
-    This section will be as far as many users bother reading
-    so make it as educational and exeplary as possible.
+	my $doc = {
+		title => 'Freaks and Geeks',
+		genres => [qw/comedy drama/],
+		imdb_score => 9.4,
+		seasons => 1,
+		starring => ['Linda Cardellini', 'James Franco', 'Jason Segel'],
+	};
+
+	if (doc_matches($doc, {
+		title => qr/geeks/i,
+		genres => 'comedy',
+		imdb_score => { '$gte' => 5, '$lte' => 9.5 },
+		starring => { '$type' => 'array', '$size' => 3 },
+	})) {
+		# will be true in this example
+	}
+
+	update_doc($doc, {
+		'$set' => { title => 'Greeks and Feaks' },
+		'$pop' => { genres => 1 },
+		'$inc' => { imdb_score => 0.6 },
+		'$unset' => { seasons => 1 },
+		'$push' => { starring => 'John Francis Daley' },
+	});
+
+	# $doc will now be:
+	{
+		title => 'Greeks and Feaks',
+		genres => ['comedy'],
+		imdb_score => 10,
+		starring => ['Linda Cardellini', 'James Franco', 'Jason Segel', 'John Francis Daley'],
+	}
 
 =head1 DESCRIPTION
 
-=for author to fill in:
-    Write a full description of the module and its features here.
-    Use subsections (=head2, =head3) as appropriate.
+MQUL (for B<M>ongoDB-style B<Q>uery & B<U>pdate B<L>anguage; pronounced
+B<umm, cool> - yeah, I know, that's the dumbest thing ever), is a general
+purpose implementation of L<MongoDB>'s query and update language. The
+implementation is not 100% compatible (it deviates only slightly from
+MongoDB's behavior, and adds a few operators the original language is
+missing).
+
+The module exports two functions: C<doc_matches()> and C<update_doc()>.
+The first method takes a document, which is really just a hash-ref (of
+whatever complexity), and a query hash-ref built in the MQUL query language. The
+method will return a true value if the document matches the query, and a
+false value otherwise. The second method takes a document and an update
+hash-ref built in the MQUL update language. The method updates the document
+(in-place) according to the update hash-ref.
+
+You can use this module for whatever purpose you see fit. It was actually
+written for L<Giddy>, my Git-database, and was extracted from Giddy's
+original code.
+
+=head2 THE LANGUAGE
+
+The language itself is described in L<MQUL::Reference>. This document
+only describes the interface of this module.
+
+You should note that MQUL does not yet support MongoDB's dot notation,
+but I plan to add to support for it in later releases.
 
 =head1 INTERFACE
 
-=for author to fill in:
-    Write a separate section listing the public components of the modules
-    interface. These normally consist of either subroutines that may be
-    exported, or methods that may be called on objects belonging to the
-    classes provided by the module.
-
 =head2 doc_matches( \%document, [ \%query ] )
+
+Receives a document hash-ref and possibly a query hash-ref, and returns
+true if the document matches the query, false otherwise. If no query
+is given (or an empty hash-ref is given), true will be returned (every
+document will match an empty query - in accordance with MongoDB).
+
+See L<MQUL::Reference/"QUERY STRUCTURE"> to learn about the structure of
+query hash-refs.
 
 =cut
 
 sub doc_matches {
 	my ($doc, $query) = @_;
 
-	croak "MongoQL::doc_matches() requires a document hash-ref."
+	croak "MQUL::doc_matches() requires a document hash-ref."
 		unless $doc && ref $doc && ref $doc eq 'HASH';
-	croak "MongoQL::doc_matches() expects a query hash-ref."
+	croak "MQUL::doc_matches() expects a query hash-ref."
 		if $query && (!ref $query || (ref $query && ref $query ne 'HASH'));
 
 	$query ||= {};
@@ -88,6 +141,18 @@ sub doc_matches {
 	# if we've reached here, the document matches, so return true
 	return 1;
 }
+
+##############################################
+# _attribute_matches( $doc, $key, $value )   #
+# ========================================== #
+# $doc   - the document hash-ref             #
+# $key   - the attribute being checked       #
+# $value - the constraint for the attribute  #
+#          taken from the query hash-ref     #
+# ------------------------------------------ #
+# returns true if constraint is met in the   #
+# provided document.                         #
+##############################################
 
 sub _attribute_matches {
 	my ($doc, $key, $value) = @_;
@@ -221,17 +286,22 @@ sub _attribute_matches {
 				}
 			}
 		}
+	} elsif (ref $value eq 'ARRAY') {
+		return unless Compare($value, $doc->{$key});
 	}
 
 	return 1;
 }
 
-=head2 _array_has_eq( $value, \@array )
-
-Returns a true value if the provided array reference holds the scalar
-value C<$value>.
-
-=cut
+##############################################
+# _array_has_eq( $value, \@array )           #
+# ========================================== #
+# $value - the value to check for            #
+# $array - the array to search in            #
+# ------------------------------------------ #
+# returns true if the value exists in the    #
+# array provided.                            #
+##############################################
 
 sub _array_has_eq {
 	my ($value, $array) = @_;
@@ -243,12 +313,15 @@ sub _array_has_eq {
 	return;
 }
 
-=head2 _array_has_re( $regex, \@array )
-
-Returns a true valie if the provided array reference holds a scalar value
-that matches the provided regular expression.
-
-=cut
+##############################################
+# _array_has_re( $regex, \@array )           #
+# ========================================== #
+# $regex - the regex to check for            #
+# $array - the array to search in            #
+# ------------------------------------------ #
+# returns true if a value exists in the      #
+# array provided that matches the regex.     #
+##############################################
 
 sub _array_has_re {
 	my ($re, $array) = @_;
@@ -260,12 +333,14 @@ sub _array_has_re {
 	return;
 }
 
-=head2 _has_adv_que( \%hash )
-
-Returns a true value if the provided hash-ref holds advanced queries (like
-C<$gt>, C<$exists>, etc.).
-
-=cut
+##############################################
+# _has_adv_que( \%hash )                     #
+# ========================================== #
+# $hash - the hash-ref to search in          #
+# ------------------------------------------ #
+# returns true if the hash-ref has any of    #
+# the lang's advanced query operators        #
+##############################################
 
 sub _has_adv_que {
 	my $hash = shift;
@@ -277,11 +352,15 @@ sub _has_adv_que {
 	return;
 }
 
-=head2 _value_in( $value, \@array )
-
-Returns a true value if the variable C<$value> is one of the items in C<\@array>.
-
-=cut
+##############################################
+# _value_in( $value, \@array )               #
+# ========================================== #
+# $value - the value to check for            #
+# $array - the array to search in            #
+# ------------------------------------------ #
+# returns true if the value is one of the    #
+# values from the array.                     #
+##############################################
 
 sub _value_in {
 	my ($value, $array) = @_;
@@ -296,35 +375,23 @@ sub _value_in {
 	return;
 }
 
-=head2 _has_adv_upd( \%hash )
-
-Returns a true value if the provided hash-ref has advanced update operations
-like C<$inc>, C<$push>, etc.
-
-=cut
-
-sub _has_adv_upd {
-	my $hash = shift;
-
-	foreach ('$inc', '$set', '$unset', '$push', '$pushAll', '$addToSet', '$pop', '$pull', '$pullAll', '$rename', '$bit') {
-		return 1 if exists $hash->{$_};
-	}
-
-	return;
-}
-
-
-
 =head2 update_doc( \%document, \%update )
+
+Receives a document hash-ref and an update hash-ref, and updates the
+document in-place according to the update hash-ref. Also returns the document
+after the update.
+
+See L<MQUL::Reference/"UPDATE STRUCTURE"> to learn about the structure of
+update hash-refs.
 
 =cut
 
 sub update_doc {
 	my ($doc, $obj) = @_;
 
-	croak "MongoQL::update_doc() requires a document hash-ref."
+	croak "MQUL::update_doc() requires a document hash-ref."
 		unless defined $doc && ref $doc && ref $doc eq 'HASH';
-	croak "MongoQL::update_doc() requires an update hash-ref."
+	croak "MQUL::update_doc() requires an update hash-ref."
 		unless defined $obj && ref $obj && ref $obj eq 'HASH';
 
 	# we only need to do something if the $obj hash-ref has any advanced
@@ -390,16 +457,36 @@ sub update_doc {
 					}
 				}
 			} elsif ($op eq '$pop') {
-				# pop values from arrays
+				# pop the last item from an array
 				next unless ref $obj->{$op} eq 'HASH';
-				use Data::Dumper;
 				foreach my $field (keys %{$obj->{$op}}) {
 					croak "The $field attribute is not an array in the doc."
 						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
 					$doc->{$field} ||= [];
-					print STDERR "WAS: ", Dumper($doc->{$field});
-					splice(@{$doc->{$field}}, $obj->{$op}->{$field}, 1);
-					print STDERR "NOW: ", Dumper($doc->{$field});
+					pop(@{$doc->{$field}})
+						if $obj->{$op}->{$field};
+				}
+			} elsif ($op eq '$shift') {
+				# shift the first item from an array
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					$doc->{$field} ||= [];
+					shift(@{$doc->{$field}})
+						if $obj->{$op}->{$field};
+				}
+			} elsif ($op eq '$splice') {
+				# splice offsets from arrays
+				next unless ref $obj->{$op} eq 'HASH';
+				foreach my $field (keys %{$obj->{$op}}) {
+					croak "The $field attribute is not an array in the doc."
+						if defined $doc->{$field} && ref $doc->{$field} ne 'ARRAY';
+					next unless	ref $obj->{$op}->{$field} &&
+							ref $obj->{$op}->{$field} eq 'ARRAY' &&
+							scalar @{$obj->{$op}->{$field}} == 2;
+					$doc->{$field} ||= [];
+					splice(@{$doc->{$field}}, $obj->{$op}->{$field}->[0], $obj->{$op}->{$field}->[1]);
 				}
 			} elsif ($op eq '$pull') {
 				# remove values from arrays
@@ -439,12 +526,35 @@ sub update_doc {
 	return $doc;
 }
 
-=head2 _index_of( $value, \@array )
+##############################################
+# _has_adv_upd( \%hash )                     #
+# ========================================== #
+# $hash - the hash-ref to search in          #
+# ------------------------------------------ #
+# returns true if the hash-ref has any of    #
+# the lang's advanced update operators       #
+##############################################
 
-Returns the index of C<$value> in the array reference, if it exists there,
-otherwise returns C<undef>.
+sub _has_adv_upd {
+	my $hash = shift;
 
-=cut
+	foreach ('$inc', '$set', '$unset', '$push', '$pushAll', '$addToSet', '$pop', '$shift', '$splice', '$pull', '$pullAll', '$rename', '$bit') {
+		return 1 if exists $hash->{$_};
+	}
+
+	return;
+}
+
+##############################################
+# _index_of( $value, \@array )               #
+# ========================================== #
+# $value - the value to search for           #
+# $array - the array to search in            #
+# ------------------------------------------ #
+# searches for the provided value in the     #
+# array, and returns its index if it is      #
+# found, or undef otherwise.                 #
+##############################################
 
 sub _index_of {
 	my ($value, $array) = @_;
@@ -462,74 +572,71 @@ sub _index_of {
 
 =head1 DIAGNOSTICS
 
-=for author to fill in:
-    List every single error and warning message that the module can
-    generate (even the ones that will "never happen"), with a full
-    explanation of each problem, one or more likely causes, and any
-    suggested remedies.
-
 =over
 
-=item C<< Error message here, perhaps with %s placeholders >>
+=item C<< MQUL::doc_matches() requires a document hash-ref. >>
 
-[Description of error here]
+This error means that you've either haven't passed the C<doc_matches()>
+method any parameters, or given it a non-hash-ref document.
 
-=item C<< Another error message here >>
+=item C<< MQUL::doc_matches() expects a query hash-ref. >>
 
-[Description of error here]
+This error means that you've passed the C<doc_matches()> attribute a
+non-hash-ref query variable. While you don't actually have to pass a
+query variable, if you do, it has to be a hash-ref.
 
-[Et cetera, et cetera]
+=item C<< MQUL::update_doc() requires a document hash-ref. >>
+
+This error means that you've either haven't passed the C<update_doc()>
+method any parameters, or given it a non-hash-ref document.
+
+=item C<< MQUL::update_doc() requires an update hash-ref. >>
+
+This error means that you've passed the C<update_doc()> method a
+non-hash-ref update variable.
+
+=item C<< The %s attribute is not an array in the doc. >>
+
+This error means that your update hash-ref tries to modify an array attribute
+(with C<$push>, C<$pushAll>, C<$addToSet>, C<$pull>, C<$pullAll>,
+C<$pop>, C<$shift> and C<$splice>), but the attribute in the document
+provided to the C<update_doc()> method is not an array.
 
 =back
 
 =head1 CONFIGURATION AND ENVIRONMENT
-
-=for author to fill in:
-    A full explanation of any configuration system(s) used by the
-    module, including the names and locations of any configuration
-    files, and the meaning of any environment variables or properties
-    that can be set. These descriptions must also include details of any
-    configuration language used.
   
-MongoQL requires no configuration files or environment variables.
+MQUL requires no configuration files or environment variables.
 
 =head1 DEPENDENCIES
 
-=for author to fill in:
-    A list of all the other modules that this module relies upon,
-    including any restrictions on versions, and an indication whether
-    the module is part of the standard Perl distribution, part of the
-    module's distribution, or must be installed separately. ]
+MQUL depends on the following modules:
 
-None.
+=over
+
+=item * L<Data::Compare>
+
+=item * L<Data::Types>
+
+=item * L<DateTime::Format::W3CDTF>
+
+=item * L<Scalar::Util>
+
+=item * L<Try::Tiny>
+
+=back
 
 =head1 INCOMPATIBILITIES
-
-=for author to fill in:
-    A list of any modules that this module cannot be used in conjunction
-    with. This may be due to name conflicts in the interface, or
-    competition for system or program resources, or due to internal
-    limitations of Perl (for example, many modules that use source code
-    filters are mutually incompatible).
 
 None reported.
 
 =head1 BUGS AND LIMITATIONS
 
-=for author to fill in:
-    A list of known problems with the module, together with some
-    indication Whether they are likely to be fixed in an upcoming
-    release. Also a list of restrictions on the features the module
-    does provide: data types that cannot be handled, performance issues
-    and the circumstances in which they may arise, practical
-    limitations on the size of data sets, special cases that are not
-    (yet) handled, etc.
-
 No bugs have been reported.
 
 Please report any bugs or feature requests to
-C<bug-MongoQL@rt.cpan.org>, or through the web interface at
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=MongoQL>.
+C<bug-MQUL@rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=MQUL>.
 
 =head1 AUTHOR
 

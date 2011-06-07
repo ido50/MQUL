@@ -3,7 +3,7 @@
 use Test::More tests => 1;
 
 BEGIN {
-	use_ok( 'MongoQL' ) || print "Bail out!\n";
+	use_ok( 'MQUL' ) || print "Bail out!\n";
 }
 
-diag( "Testing MongoQL $MongoQL::VERSION, Perl $], $^X" );
+diag( "Testing MQUL $MQUL::VERSION, Perl $], $^X" );

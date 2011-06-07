@@ -12,5 +12,5 @@
 ^\.lwpcookies$
 ^cover_db$
 ^pod2htm.*\.tmp$
-^MongoQL-.*$
+^MQUL-.*$
 ^\.build.*$

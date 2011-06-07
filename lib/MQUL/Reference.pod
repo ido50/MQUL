@@ -1,0 +1,339 @@
+=head1 NAME
+
+MQUL::Reference - Describes the MQUL query and update language
+
+=head1 INTRODUCTION
+
+The MQUL language is heavily based on L<MongoDB>'s query and update language.
+While I don't intend to make them 100% compatible, they are very nearly
+so, with only some minor differences which are mostly additions rather
+than behavioral changes.
+
+The language deals with two subjects: queries and updates. Queries are
+used to match documents (in the MongoDB sense of the word; documents are
+just hash-refs in the Perl world), while updates are used to modify the
+attributes of a document.
+
+=head1 QUERY STRUCTURES
+
+A query is a hash-ref whose keys are attributes, and values are constraints.
+A document needs to meet the constraints of every attribute in the query
+hash-ref in order to match.
+
+=head2 THE EQUALITY CONSTRAINT
+
+The simplest constraint a query hash-ref can define is an equality constraint,
+which checks if the value of a certain attribute in a document equals
+the value defined by the constraint. For example:
+
+	{ title => 'Freaks and Geeks' }
+
+A document will match this query hash-ref if it has a title attribute,
+whose value equals 'Freaks and Geeks'.
+
+The equality attribute in MongoDB actually works with arrays too, but the
+behavior is a bit different: If the document has the constrained attribute,
+but this attribute is an array, the document will match the constraint
+if that array has the value in it. For example, this document will match
+the above constraint:
+
+	{ tv_shows => ['Freaks and Geeks', 'Undeclared', 'How I Met Your Mother'] }
+
+MQUL extends the equality constraint even further than MongoDB. In MQUL,
+the value of the constraint doesn't have to be a scalar, but can actually
+be a data structure such as an array or hash reference. For example:
+
+	{
+		numbers => {
+			one => 1,
+			two => 2,
+			three => 3,
+		}
+	}
+
+A document will match this constraint if it has the 'numbers' attribute,
+with exactly the same hash-ref as its value. In order to compare the
+document's structure with the constraint structure, MQUL uses L<Data::Compare>.
+
+=head2 THE LARGER/SMALLER THAN CONSTRAINTS
+
+Some other simple constrains require that an attribute will be larger
+or smaller than a certain value. Mostly, the comparison will be mathematical
+(e.g. C<< 5 > 3 >> or C<< 3 <= 5 >>). However, the comparison can also be
+alphanumerical (e.g. C<< 'and' lt 'bob' >> or C<< 'max' ge 'max' >>).
+
+For example:
+
+	{ number => { '$gte' => 2, '$lt' => 5 } }
+
+Here, we're asking documents to have the number attribute, with a number
+that's either larger (or equal) than 2, and lower than  5 (so 2, 3 and 4
+are acceptable).
+
+As you can see, this time the constraints are provided to the 'number'
+attribute in the query structure as a hash-ref with two constraints. The
+fact that we're giving more than one constraint on the same attribute isn't
+the reason for using a hash-ref. A hash-ref is used for all of the constraints
+in the language, except of course the equality constraint described before,
+so the hash-ref can also have only one constraint, like:
+
+	{ string => { '$lt' => 'bob' } }
+
+The following larger/smaller than constraints are available:
+
+=over
+
+=item * C<$gte> - Greater than or equals to (in Perl, this compares to the
+C<< >= >> operator in the mathematical sense, and to C<< ge >> in the
+alphanumerical sense).
+
+=item * C<$gt> - Greater than (in Perl, this compares to the
+C<< > >> operator in the mathematical sense, and to C<< gt >> in the
+alphanumerical sense).
+
+=item * C<$lte> - Less than or equals to (in Perl, this compares to the
+C<< <= >> operator in the mathematical sense, and to C<< le >> in the
+alphanumerical sense).
+
+=item * C<$lt> - Less than (in Perl, this compares to the
+C<< < >> operator in the mathematical sense, and to C<< lt >> in the
+alphanumerical sense).
+
+=back
+
+=head2 THE NON-EQUALITY CONSTRAINT (AND THE SECOND EQUALITY CONSTRAINT)
+
+Sometimes you want to make sure a certain attribute's value does not equal
+some specific value. This is where the C<$ne> constraint is useful. Once
+again, the comparison can either be mathematical (in which case it translates
+to the C<< != >> operator in Perl), or alphanumerical (in which case it
+translates to the C<< ne >> operator in Perl).
+
+	{
+		title => { '$ne' => 'Freaks and Geeks' },
+		year => { '$ne' => 1999 },
+	}
+
+The following document will match this constraint:
+
+	{
+		title => 'Undeclared',
+		year => 2001,
+	}
+
+The C<$ne> constraint is somewhat different than the equality constraint
+described earlier. It cannot work with arrays, and will not compare complex
+data structures.
+
+For completeness, MQUL also provides a second equality constrained, called
+C<$eq>, which is exactly the opposite of C<$ne>. However, this equality
+constraint, just like C<$ne>, does not work with arrays and complex data
+structures.
+
+=head2 THE EXISTS (OR NOT EXISTS) CONSTRAINTS
+
+Sometimes you just wanna make sure an attribute exists (or doesn't)
+in a document, whatever the value. In which case, the C<$exists> constraint
+can be used:
+
+	{ imdb_score => { '$exists' => 1 } }
+
+This example will only match documents that have the 'imdb_score' attribute.
+
+	{ imdb_score => { '$exists' => 0 } }
+
+This, however, will only match documents that I<don't> have the 'imdb_score'
+attribute.
+
+=head2 THE MODULO CONSTRAINT
+
+The C<$mod> constraint can be used for fast modulo queries on a certain
+attribute. For example:
+
+	{ number => { '$mod' => [2, 0] } }
+
+This constraint asks that C<< $doc->{number} % 2 == 0 >>.
+
+=head2 THE IN OR NOT IN CONSTRAINTS
+
+Sometimes you want to make sure the value of a certain attribute will
+be (or won't be) one of a predefined set of acceptable (or not acceptable)
+values. For this, the C<$in> and the C<$nin> constraints can be used.
+For example:
+
+	{
+		title => { '$in' => ['Freaks and Geeks', 'Undeclared'] },
+		genre => { '$nin' => ['Drama', 'Documentary'] },
+	}
+
+This query will only match documents whose 'title' attribute is either
+'Freaks and Geeks' or 'Undeclared', and whose 'genre' attribute is neither
+'Drama' nor 'Documentary'.
+
+=head2 THE SIZE CONSTRAINT
+
+If your documents have an attribute which holds an array or a hash, you
+can match those whose arrays/hashes are of a certain size.
+For example:
+
+	{ tags => { '$size' => 2 } }
+
+Will match documents that have the 'tags' attribute, with either an array
+of two values, or a hash with two keys.
+
+=head2 THE ALL CONSTRAINT
+
+The C<$all> constraint is used to make sure an array attribute has all
+values in a set of predefined values (it can have more values though).
+For example:
+
+	{ tags => { '$all' => [qw/love hate/] } }
+
+This will only match documents that have the 'tags' attribute with an
+array that has both 'love' and 'hate' in it. This document will match:
+
+	{ tags => [qw/love indifference hate/] }
+
+=head2 THE TYPE CONSTRAINT
+
+The C<$type> constraint can be used when you need a certain attribute or
+attributes to have values of a certain specific type. In MongoDB, the types
+are numbered (like 2 for strings, 4 for arrays, etc.), which is really
+hard to remember. In MQUL, however, the types are named, plus (mostly
+due to differences between the Perl world and the MongoDB world) the
+actual types available are somewhat different.
+
+But before we go into the list of available types, let's see a simple
+example:
+
+	{
+		tags => { '$type' => 'array' },
+		imdb_score => { '$type' => 'int' },
+	}
+
+This will only match documents that have a 'tags' attribute with arrays
+as their values, and an 'imdb_score' value with an integer (but not a float)
+as the value. So, the following document will match:
+
+	{
+		title => 'Fake Title',
+		tags => [qw/comedy drama/],
+		imdb_score => 8,
+	}
+
+While this document won't:
+
+	{
+		title => 'Another Fake Title',
+		tags => [qw/mystery thriller/],
+		imdb_score => 8.5,
+	}
+
+Even though 'tags' is an array, 'imdb_score' is not an integer.
+
+The following types are available:
+
+=over
+
+=item * 'int' - Matches integers, including negative integers and zero.
+
+=item * 'float' - Matches floating point numbers (like 1.23 or 30, which is also an integer).
+
+=item * 'real' - Matches real numbers (like Pi, which is a rational number).
+
+=item * 'whole' - Matches whole numbers, which are positive integers and zero.
+
+=item * 'string' - Matches strings (basically, any scalar value in Perl is a string, including numbers).
+
+=item * 'array' - Matches array references.
+
+=item * 'hash' - Matches hash references.
+
+=item * 'bool' - Matches boolean values (everything in Perl is a boolean value, so
+every attribute will match this, even those with undefined values, or false
+values such as 0 or the empty string).
+
+=item * 'date' - This will match W3C formatted datetime B<strings>, as described
+by the L<DateTime::Format::W3CDTF> module.
+
+=item * 'null' - This will match documents that have a certain attribute,
+but whose value is undefined (i.e. C<undef>).
+
+=item * 'regex' - This will match regular expressions, such as C<qr/^\d+$/>.
+
+=back
+
+=head2 OR QUERIES
+
+As you've probably realised by now. A document need to match every
+constraint in the query hash-ref. If we were to translate a query hash-ref
+into an SQL C<WHERE> clause, the constraints will be joined with an C<AND>.
+
+A query language is really nothing without the ability for C<OR> queries
+(or sub-queries). Just like in MongoDB, the C<$or> construct can be used.
+The usage is simple: you give the query hash-ref a key called C<$or>,
+with a value which is an array reference. This array reference holds
+one or more (well, two or more if you actually want it to mean something)
+hash-refs of constraints. For example:
+
+	{
+		imdb_score => { '$gt' => 7 },
+		'$or' => [
+			{ title => 'Freaks and Geeks' },
+			{ title => 'Undeclared' },
+		]
+	}
+
+If we were to translate this to an SQL C<WHERE> clause, this is what
+we'll get:
+
+	WHERE imdb_score > 7 AND (title = 'Freaks and Geeks' OR title = 'Undeclared')
+
+So, in order to match this query, a document needs to have the 'imdb_score'
+attribute with a value larger than 7, and a 'title' attribute with either
+'Freaks and Geeks' or 'Undeclared' as its value.
+
+=head1 UPDATE STRUCTURES
+
+
+
+=head1 AUTHOR
+
+Ido Perlmuter <ido at ido50 dot net>
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2011, Ido Perlmuter C<< ido at ido50 dot net >>.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself, either version
+5.8.1 or any later version. See L<perlartistic|perlartistic> 
+and L<perlgpl|perlgpl>.
+
+The full text of the license can be found in the
+LICENSE file included with this module.
+
+=head1 DISCLAIMER OF WARRANTY
+
+BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN
+OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
+PROVIDE THE SOFTWARE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE
+ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH
+YOU. SHOULD THE SOFTWARE PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL
+NECESSARY SERVICING, REPAIR, OR CORRECTION.
+
+IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
+REDISTRIBUTE THE SOFTWARE AS PERMITTED BY THE ABOVE LICENCE, BE
+LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL,
+OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY TO USE
+THE SOFTWARE (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA BEING
+RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A
+FAILURE OF THE SOFTWARE TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
+SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+=cut

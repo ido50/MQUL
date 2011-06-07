@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 10;
+use Test::More tests => 57;
 use MongoQL qw/doc_matches/;
 use Try::Tiny;
 
@@ -31,9 +31,108 @@ ok(doc_matches({ one => 1, two => 2 }, {}), 'doc_matches() returns true when an 
 
 # let's get to actual querying and start with simple equality and regex checks
 ok(doc_matches({ string => 'yo yo', integer => 123 }, { string => 'yo yo' }), 'simple equality works');
+ok(!doc_matches({ string => 'my name is nobody' }, { string => 'yo yo' }), 'simple equality does not match erroneously');
 ok(doc_matches({ string => 'my name is nobody' }, { string => qr/nobody$/ }), 'simple regex works');
+ok(!doc_matches({ string => 'yo yo' }, { string => qr/nobody$/ }), 'simple regex does not match erroneously');
 
 # now let's take a look at non-equality and $eq-style equality
 ok(doc_matches({ should_eq => 'clint', should_not_eq => 'westwood' }, { should_eq => { '$eq' => 'clint' }, should_not_eq => { '$ne' => 'eastwood' } }), 'simple non-equality works');
+
+# okay, now we're gonna check every advanced operator one at a time
+# 1. $gt
+ok(doc_matches({ number => 2 }, { number => { '$gt' => 1 } }), 'simple $gt works');
+ok(!doc_matches({ number => 2 }, { number => { '$gt' => 3 } }), 'simple $gt does not match erroneously');
+# 2. $gte
+ok(doc_matches({ float => 12.5, integer => 23 }, { float => { '$gte' => 11 }, integer => { '$gte' => 23 } }), 'simple $gte works');
+ok(!doc_matches({ float => 12.5, integer => 23 }, { float => { '$gte' => 13 }, integer => { '$gte' => 23 } }), 'simple $gte does not match erroneously');
+# 3. $lt
+ok(doc_matches({ number => 4 }, { number => { '$lt' => 5 } }), 'simple $lt works');
+ok(!doc_matches({ number => 2 }, { number => { '$lt' => 2 } }), 'simple $lt does not match erroneously');
+# 4. $lte
+ok(doc_matches({ number => 4 }, { number => { '$lte' => 4 } }), 'simple $lte works');
+ok(!doc_matches({ integer => 10, float => 5.124 }, { integer => { '$lte' => 8 }, float => { '$lte' => 5.124 } }), 'simple $lte does not match erroneously');
+# 5. $exists
+ok(doc_matches({ now => 'for', something => 'completely' }, { something => { '$exists' => 1 } }), 'simple $exists works');
+ok(!doc_matches({ now => 'for', something => 'completely' }, { different => { '$exists' => 1 } }), 'simple $exists does not match erroneously');
+# 6. not $exists
+ok(doc_matches({ now => 'for', something => 'completely' }, { different => { '$exists' => 0 } }), 'simple not $exists works');
+ok(!doc_matches({ now => 'for', something => 'completely' }, { something => { '$exists' => 0 } }), 'simple not $exists does not match erroneously');
+# 7. $mod
+ok(doc_matches({ two => 2, three => 3 }, { two => { '$mod' => [2, 0] }, three => { '$mod' => [2, 1] } }), 'simple $mod works');
+ok(!doc_matches({ five => 5 }, { five => { '$mod' => [2, 0] } }), 'simple $mod does not match erroneously');
+# 8. $in
+ok(doc_matches({ monty => 'python' }, { monty => { '$in' => [qw/cobra python viper/] } }), 'simple $in works');
+ok(!doc_matches({ age => 23 }, { age => { '$in' => [1 .. 20] } }), 'simple $in does not match erroneously');
+# 9. $nin
+ok(doc_matches({ monty => 'python' }, { monty => { '$nin' => [qw/cobra viper asp/] } }), 'simple $nin works');
+ok(!doc_matches({ monty => 'python' }, { monty => { '$nin' => [qw/python viper cobra asp/] } }), 'simple $nin does not match erroneously');
+# 10. $size
+ok(doc_matches({ array => [1 .. 10] }, { array => { '$size' => 10 } }), 'simple $size works');
+ok(!doc_matches({ array => [1] }, { array => { '$size' => 10 } }), 'simple $size does not match erroneously');
+# 11. $all
+ok(doc_matches({ snakes => [qw/python asp cobra viper/] }, { snakes => { '$all' => [qw/python cobra/] } }), 'simple $all works');
+ok(!doc_matches({ snakes => [qw/python asp/] }, { snakes => { '$all' => [qw/python asp rattler/] } }), 'simple $all does not match erroneously');
+# 12. $type
+ok(doc_matches({ integer => 20 }, { integer => { '$type' => 'int' } }), 'positive integers match');
+ok(doc_matches({ integer => -20 }, { integer => { '$type' => 'int' } }), 'negative integers match');
+ok(doc_matches({ whole => 0 }, { whole => { '$type' => 'whole' } }), 'whole numbers match');
+ok(!doc_matches({ whole => -2 }, { whole => { '$type' => 'whole' } }), 'negative integers do not match as wholes');
+ok(doc_matches({ float => +1.23e99 }, { float => { '$type' => 'float' } }), 'positive floats match');
+ok(doc_matches({ float => -1.23e99 }, { float => { '$type' => 'float' } }), 'negative floats match');
+ok(doc_matches({ real => 12.51 }, { real => { '$type' => 'real' } }), 'positive real numbers match');
+ok(doc_matches({ real => -12.51 }, { real => { '$type' => 'real' } }), 'negative real numbers match');
+ok(doc_matches({ string => 'this is a string' }, { string => { '$type' => 'string' } }), 'strings match');
+ok(doc_matches({ array => [1 .. 4] }, { array => { '$type' => 'array' } }), 'arrays match');
+ok(doc_matches({ hash => { one => 1, two => 2 } }, { hash => { '$type' => 'hash' } }), 'hashes match');
+ok(doc_matches({ bool => 1 }, { bool => { '$type' => 'bool' } }), 'booleans match');
+ok(doc_matches({ date => '2003-02-15T13:50:05-05:00' }, { date => { '$type' => 'date' } }), 'w3c formatted dates match');
+ok(doc_matches({ null => undef }, { null => { '$type' => 'null' } }), 'nulls (undefs) match');
+ok(doc_matches({ regex => qr/\d+/ }, { regex => { '$type' => 'regex' } }), 'regexes match');
+ok(!doc_matches({ float => 20.51 }, { float => { '$type' => 'int' } }), "floats don't match as integers");
+ok(doc_matches({ number => 0x1234 }, { number => { '$type' => 'string' } }), "numbers can match as strings");
+ok(!doc_matches({ array => [1 .. 5] }, { array => { '$type' => 'hash' } }), "arrays don't match as hashes");
+ok(!doc_matches({ date => '12.06.1984' }, { date => { '$type' => 'date' } }), "improperly formatted dates don't match");
+ok(!doc_matches({ null => '' }, { null => { '$type' => 'null' } }), "false values don't match as nulls");
+
+# let's perform some complex queries
+ok(doc_matches({
+	integer => 12,
+	date => '2011-06-07T14:30:00+03:00',
+	things => ['ball', 'bull', 'shit'],
+}, {
+	integer => { '$gte' => 5, '$lte' => 12 },
+	date => { '$type' => 'date', '$lt' => '2020-06-07T14:30:00+03:00' },
+	things => { '$all' => ['shit'] },
+}), 'complex #1 okay');
+ok(doc_matches({
+	and => -12.5,
+	now => 'now',
+	for => { needs_more => 'cowbell' },
+	something => [ { one => 1 }, { two => 2 } ],
+	name => 'Ido Perlmuter',
+}, {
+	and => { '$type' => 'float', '$lte' => 0 },
+	now => { '$exists' => 1 },
+	then => { '$exists' => 0 },
+	for => { '$type' => 'hash', '$size' => 1 },
+	name => 'Ido Perlmuter',
+}), 'complex #2 okay');
+ok(doc_matches({
+	type => 'blog',
+	name => 'vlog',
+	tags => [qw/sex drugs rocknroll/],
+	members => {
+		ido => 'admin',
+		moses => 'leader',
+		jesus => 'savior',
+		misus => 'wife',
+	},
+	score => 8.5,
+}, {
+	type => { '$in' => [qw/newspaper blog forum lie/] },
+	name => { '$nin' => [qw/something inappropriate and stuff/] },
+	members => { '$type' => 'hash' },
+	score => { '$gte' => 7, '$mod' => [5, 3] },
+}), 'complex #3 okay');
 
 done_testing();

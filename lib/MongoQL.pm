@@ -12,6 +12,7 @@ use strict;
 
 use Carp;
 use Data::Compare;
+use Data::Types qw/:is/;
 use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
@@ -253,42 +254,42 @@ sub _attribute_matches {
 				my $term = $value->{$q};
 				if ($q eq '$gt') {
 					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if ($doc->{$key} =~ m/^\d+(\.\d+)?$/) {
+					if (is_float($doc->{$key})) {
 						return unless $doc->{$key} > $term;
 					} else {
 						return unless $doc->{$key} gt $term;
 					}
 				} elsif ($q eq '$gte') {
 					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if ($doc->{$key} =~ m/^\d+(\.\d+)?$/) {
+					if (is_float($doc->{$key})) {
 						return unless $doc->{$key} >= $term;
 					} else {
 						return unless $doc->{$key} ge $term;
 					}
 				} elsif ($q eq '$lt') {
 					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if ($doc->{$key} =~ m/^\d+(\.\d+)?$/) {
+					if (is_float($doc->{$key})) {
 						return unless $doc->{$key} < $term;
 					} else {
 						return unless $doc->{$key} lt $term;
 					}
-				} elsif ($q eq '$gt') {
+				} elsif ($q eq '$lte') {
 					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if ($doc->{$key} =~ m/^\d+(\.\d+)?$/) {
+					if (is_float($doc->{$key})) {
 						return unless $doc->{$key} <= $term;
 					} else {
 						return unless $doc->{$key} le $term;
 					}
 				} elsif ($q eq '$eq') {
 					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if ($doc->{$key} =~ m/^\d+(\.\d+)?$/) {
+					if (is_float($doc->{$key})) {
 						return unless $doc->{$key} == $term;
 					} else {
 						return unless $doc->{$key} eq $term;
 					}
 				} elsif ($q eq '$ne') {
 					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if ($doc->{$key} =~ m/^\d+(\.\d+)?$/) {
+					if (is_float($doc->{$key})) {
 						return unless $doc->{$key} != $term;
 					} else {
 						return unless $doc->{$key} ne $term;
@@ -300,13 +301,13 @@ sub _attribute_matches {
 						return if exists $doc->{$key};
 					}
 				} elsif ($q eq '$mod' && ref $term eq 'ARRAY' && scalar @$term == 2) {
-					return unless defined $doc->{$key} && $doc->{$key} =~ m/^\d+(\.\d+)?$/ && $doc->{$key} % $term->[0] == $term->[1];
+					return unless defined $doc->{$key} && is_float($doc->{$key}) && $doc->{$key} % $term->[0] == $term->[1];
 				} elsif ($q eq '$in' && ref $term eq 'ARRAY') {
 					return unless defined $doc->{$key} && &_value_in($doc->{$key}, $term);
 				} elsif ($q eq '$nin' && ref $term eq 'ARRAY') {
 					return unless defined $doc->{$key} && !&_value_in($doc->{$key}, $term);
-				} elsif ($q eq '$size' && $term =~ m/^\d+$/) {
-					return unless defined $doc->{$key} && ref $doc->{$key} eq 'ARRAY' && scalar @{$doc->{$key}} == $term;
+				} elsif ($q eq '$size' && is_int($term)) {
+					return unless defined $doc->{$key} && ((ref $doc->{$key} eq 'ARRAY' && scalar @{$doc->{$key}} == $term) || (ref $doc->{$key} eq 'HASH' && scalar keys %{$doc->{$key}} == $term));
 				} elsif ($q eq '$all' && ref $term eq 'ARRAY') {
 					return unless defined $doc->{$key} && ref $doc->{$key} eq 'ARRAY';
 					foreach (@$term) {
@@ -314,19 +315,25 @@ sub _attribute_matches {
 					}
 				} elsif ($q eq '$type' && !ref $term) {
 					if ($term eq 'int') {
-						return unless defined $doc->{$key} && $doc->{$key} =~ m/^\d+$/;
-					} elsif ($term eq 'double') {
-						return unless defined $doc->{$key} && $doc->{$key} =~ m/^\d+\.[1-9]\d*$/;
+						return unless defined $doc->{$key} && is_int($doc->{$key});
+					} elsif ($term eq 'float') {
+						return unless defined $doc->{$key} && is_float($doc->{$key});
+					} elsif ($term eq 'real') {
+						return unless defined $doc->{$key} && is_real($doc->{$key});
+					} elsif ($term eq 'whole') {
+						return unless defined $doc->{$key} && is_whole($doc->{$key});
 					} elsif ($term eq 'string') {
-						return unless defined $doc->{$key} && $doc->{$key} =~ m/^[[:alnum:]]+$/;
+						return unless defined $doc->{$key} && is_string($doc->{$key});
 					} elsif ($term eq 'array') {
 						return unless defined $doc->{$key} && ref $doc->{$key} eq 'ARRAY';
+					} elsif ($term eq 'hash') {
+						return unless defined $doc->{$key} && ref $doc->{$key} eq 'HASH';
 					} elsif ($term eq 'bool') {
 						# boolean - not really supported, will always return true since everything in Perl is a boolean
 					} elsif ($term eq 'date') {
 						return unless defined $doc->{$key} && !ref $doc->{$key};
 						my $date = try { DateTime::Format::W3CDTF->parse_datetime($doc->{$key}) } catch { undef };
-						return unless blessed $date && $date->isa('DateTime');
+						return unless blessed $date && blessed $date eq 'DateTime';
 					} elsif ($term eq 'null') {
 						return unless exists $doc->{$key} && !defined $doc->{$key};
 					} elsif ($term eq 'regex') {
@@ -401,10 +408,10 @@ sub _value_in {
 	my ($value, $array) = @_;
 
 	foreach (@$array) {
-		next if m/^\d+(\.\d+)?$/ && $value !~ m/^\d+(\.\d+)?$/;
-		next if !m/^\d+(\.\d+)?$/ && $value =~ m/^\d+$(\.\d+)?/;
-		return 1 if m/^\d+(\.\d+)?$/ && $value == $_;
-		return 1 if !m/^\d+(\.\d+)?$/ && $value eq $_;
+		next if is_float($_) && !is_float($value);
+		next if !is_float($_) && is_float($value);
+		return 1 if is_float($_) && $value == $_;
+		return 1 if !is_float($_) && $value eq $_;
 	}
 
 	return;
@@ -438,10 +445,10 @@ sub _index_of {
 	my ($value, $array) = @_;
 
 	for (my $i = 0; $i < scalar @$array; $i++) {
-		next if $array->[$i] =~ m/^\d+(\.\d+)?$/ && $value !~ m/^\d+(\.\d+)?$/;
-		next if $array->[$i] !~ m/^\d+(\.\d+)?$/ && $value =~ m/^\d+$(\.\d+)?/;
-		return $i if $array->[$i] =~ m/^\d+(\.\d+)?$/ && $value == $array->[$i];
-		return $i if $array->[$i] !~ m/^\d+(\.\d+)?$/ && $value eq $array->[$i];
+		next if is_float($array->[$i]) && !is_float($value);
+		next if !is_float($array->[$i]) && is_float($value);
+		return $i if is_float($array->[$i]) && $value == $array->[$i];
+		return $i if is_float($array->[$i]) && $value eq $array->[$i];
 	}
 
 	return;

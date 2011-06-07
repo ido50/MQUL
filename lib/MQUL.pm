@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "0.001";
+our $VERSION = "0.001001";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -63,31 +63,34 @@ MQUL - General purpose, MongoDB-style query and update language
 =head1 DESCRIPTION
 
 MQUL (for B<M>ongoDB-style B<Q>uery & B<U>pdate B<L>anguage; pronounced
-B<umm, cool> - yeah, I know, that's the dumbest thing ever), is a general
+I<"umm, cool">; yeah, I know, that's the dumbest thing ever), is a general
 purpose implementation of L<MongoDB>'s query and update language. The
-implementation is not 100% compatible (it deviates only slightly from
-MongoDB's behavior, and adds a few operators the original language is
-missing).
+implementation is not 100% compatible, but it only slightly deviates from
+MongoDB's behavior, actually extending it a bit.
 
 The module exports two functions: C<doc_matches()> and C<update_doc()>.
 The first method takes a document, which is really just a hash-ref (of
 whatever complexity), and a query hash-ref built in the MQUL query language. The
 method will return a true value if the document matches the query, and a
 false value otherwise. The second method takes a document and an update
-hash-ref built in the MQUL update language. The method updates the document
+hash-ref built in the MQUL update language. The method modifies the document
 (in-place) according to the update hash-ref.
 
 You can use this module for whatever purpose you see fit. It was actually
 written for L<Giddy>, my Git-database, and was extracted from Giddy's
-original code.
+original code. Outside of the database world, I plan to use it in an application
+that performs tests (such as process monitoring for example), and uses the
+query language to determine whether the results are valid or not (in our
+monitoring example, that could be CPU usage above a certain threshold and
+stuff like that). 
 
 =head2 THE LANGUAGE
 
 The language itself is described in L<MQUL::Reference>. This document
 only describes the interface of this module.
 
-You should note that MQUL does not yet support MongoDB's dot notation,
-but I plan to add to support for it in later releases.
+The reference document also details MQUL's current differences from the
+original MongoDB language.
 
 =head1 INTERFACE
 

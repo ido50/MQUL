@@ -77,7 +77,7 @@ hash-ref built in the MQUL update language. The method modifies the document
 (in-place) according to the update hash-ref.
 
 You can use this module for whatever purpose you see fit. It was actually
-written for L<Giddy>, my Git-database, and was extracted from Giddy's
+written for L<Giddy>, my Git-database, and was extracted from its
 original code. Outside of the database world, I plan to use it in an application
 that performs tests (such as process monitoring for example), and uses the
 query language to determine whether the results are valid or not (in our
@@ -385,7 +385,7 @@ document in-place according to the update hash-ref. Also returns the document
 after the update. If the update hash-ref doesn't have any of the update
 modifiers described by the language, then the update hash-ref is considered
 as what the document should now be, and so will simply replace the document
-hash-ref.
+hash-ref (once again, in accordance with MongoDB).
 
 See L<MQUL::Reference/"UPDATE STRUCTURE"> to learn about the structure of
 update hash-refs.

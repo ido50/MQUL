@@ -4,10 +4,10 @@ MQUL::Reference - Describes the MQUL query and update language
 
 =head1 INTRODUCTION
 
-The MQUL language is heavily based on L<MongoDB>'s query and update language.
-While I don't intend to make them 100% compatible, they are very nearly
-so, with only some minor differences which are mostly additions rather
-than behavioral changes.
+The MQUL (pronounced I<"umm, cool">) language is heavily based on L<MongoDB>'s
+query and update language. While I don't intend to make it 100% compatible with it,
+it is very nearly so, with only some minor differences which are mostly
+additions rather than behavioral changes.
 
 The language deals with two subjects: queries and updates. Queries are
 used to match documents (in the MongoDB sense of the word; documents are
@@ -26,7 +26,7 @@ The simplest constraint a query hash-ref can define is an equality constraint,
 which checks if the value of a certain attribute in a document equals
 the value defined by the constraint. For example:
 
-	{ title => 'Freaks and Geeks' }
+	$query = { title => 'Freaks and Geeks' }
 
 A document will match this query hash-ref if it has a title attribute,
 whose value equals 'Freaks and Geeks'.
@@ -34,16 +34,19 @@ whose value equals 'Freaks and Geeks'.
 The equality attribute in MongoDB actually works with arrays too, but the
 behavior is a bit different: If the document has the constrained attribute,
 but this attribute is an array, the document will match the constraint
-if that array has the value in it. For example, this document will match
-the above constraint:
+if that array has the value in it. For example, the query:
 
-	{ tv_shows => ['Freaks and Geeks', 'Undeclared', 'How I Met Your Mother'] }
+	$query = { tv_shows => 'Freaks and Geeks' }
+
+Will match the following document:
+
+	$document = { tv_shows => ['Freaks and Geeks', 'Undeclared', 'How I Met Your Mother'] }
 
 MQUL extends the equality constraint even further than MongoDB. In MQUL,
 the value of the constraint doesn't have to be a scalar, but can actually
 be a data structure such as an array or hash reference. For example:
 
-	{
+	$query = {
 		numbers => {
 			one => 1,
 			two => 2,
@@ -52,7 +55,7 @@ be a data structure such as an array or hash reference. For example:
 	}
 
 A document will match this constraint if it has the 'numbers' attribute,
-with exactly the same hash-ref as its value. In order to compare the
+with exactly the same hash-ref from the query as its value. In order to compare the
 document's structure with the constraint structure, MQUL uses L<Data::Compare>.
 
 =head2 THE LARGER/SMALLER THAN CONSTRAINTS
@@ -64,7 +67,7 @@ alphanumerical (e.g. C<< 'and' lt 'bob' >> or C<< 'max' ge 'max' >>).
 
 For example:
 
-	{ number => { '$gte' => 2, '$lt' => 5 } }
+	$query = { number => { '$gte' => 2, '$lt' => 5 } }
 
 Here, we're asking documents to have the number attribute, with a number
 that's either larger (or equal) than 2, and lower than  5 (so 2, 3 and 4
@@ -77,25 +80,25 @@ the reason for using a hash-ref. A hash-ref is used for all of the constraints
 in the language, except of course the equality constraint described before,
 so the hash-ref can also have only one constraint, like:
 
-	{ string => { '$lt' => 'bob' } }
+	$query = { string => { '$lt' => 'bob' } }
 
 The following larger/smaller than constraints are available:
 
 =over
 
-=item * C<$gte> - Greater than or equals to (in Perl, this compares to the
+=item * C<$gte> - Greater than or equals to (in Perl, this translates to the
 C<< >= >> operator in the mathematical sense, and to C<< ge >> in the
 alphanumerical sense).
 
-=item * C<$gt> - Greater than (in Perl, this compares to the
+=item * C<$gt> - Greater than (in Perl, this translates to the
 C<< > >> operator in the mathematical sense, and to C<< gt >> in the
 alphanumerical sense).
 
-=item * C<$lte> - Less than or equals to (in Perl, this compares to the
+=item * C<$lte> - Less than or equals to (in Perl, this translates to the
 C<< <= >> operator in the mathematical sense, and to C<< le >> in the
 alphanumerical sense).
 
-=item * C<$lt> - Less than (in Perl, this compares to the
+=item * C<$lt> - Less than (in Perl, this translates to the
 C<< < >> operator in the mathematical sense, and to C<< lt >> in the
 alphanumerical sense).
 
@@ -109,14 +112,14 @@ again, the comparison can either be mathematical (in which case it translates
 to the C<< != >> operator in Perl), or alphanumerical (in which case it
 translates to the C<< ne >> operator in Perl).
 
-	{
+	$query = {
 		title => { '$ne' => 'Freaks and Geeks' },
 		year => { '$ne' => 1999 },
 	}
 
 The following document will match this constraint:
 
-	{
+	$document = {
 		title => 'Undeclared',
 		year => 2001,
 	}
@@ -125,7 +128,7 @@ The C<$ne> constraint is somewhat different than the equality constraint
 described earlier. It cannot work with arrays, and will not compare complex
 data structures.
 
-For completeness, MQUL also provides a second equality constrained, called
+For completeness, MQUL also provides a second equality constraint, called
 C<$eq>, which is exactly the opposite of C<$ne>. However, this equality
 constraint, just like C<$ne>, does not work with arrays and complex data
 structures.
@@ -133,14 +136,14 @@ structures.
 =head2 THE EXISTS (OR NOT EXISTS) CONSTRAINTS
 
 Sometimes you just wanna make sure an attribute exists (or doesn't)
-in a document, whatever the value. In which case, the C<$exists> constraint
-can be used:
+in a document, whatever the value (even undefined). In such cases, the
+C<$exists> constraint can be used:
 
-	{ imdb_score => { '$exists' => 1 } }
+	$query = { imdb_score => { '$exists' => 1 } }
 
-This example will only match documents that have the 'imdb_score' attribute.
+The above example will only match documents that have the 'imdb_score' attribute.
 
-	{ imdb_score => { '$exists' => 0 } }
+	$query = { imdb_score => { '$exists' => 0 } }
 
 This, however, will only match documents that I<don't> have the 'imdb_score'
 attribute.
@@ -150,9 +153,9 @@ attribute.
 The C<$mod> constraint can be used for fast modulo queries on a certain
 attribute. For example:
 
-	{ number => { '$mod' => [2, 0] } }
+	$query = { number => { '$mod' => [2, 0] } }
 
-This constraint asks that C<< $doc->{number} % 2 == 0 >>.
+This constraint asks that C<< $document->{number} % 2 == 0 >>.
 
 =head2 THE IN OR NOT IN CONSTRAINTS
 
@@ -161,7 +164,7 @@ be (or won't be) one of a predefined set of acceptable (or not acceptable)
 values. For this, the C<$in> and the C<$nin> constraints can be used.
 For example:
 
-	{
+	$query = {
 		title => { '$in' => ['Freaks and Geeks', 'Undeclared'] },
 		genre => { '$nin' => ['Drama', 'Documentary'] },
 	}
@@ -176,9 +179,9 @@ If your documents have an attribute which holds an array or a hash, you
 can match those whose arrays/hashes are of a certain size.
 For example:
 
-	{ tags => { '$size' => 2 } }
+	$query = { tags => { '$size' => 2 } }
 
-Will match documents that have the 'tags' attribute, with either an array
+This will match documents that have the 'tags' attribute, with either an array
 of two values, or a hash with two keys.
 
 =head2 THE ALL CONSTRAINT
@@ -187,12 +190,12 @@ The C<$all> constraint is used to make sure an array attribute has all
 values in a set of predefined values (it can have more values though).
 For example:
 
-	{ tags => { '$all' => [qw/love hate/] } }
+	$query = { tags => { '$all' => [qw/love hate/] } }
 
 This will only match documents that have the 'tags' attribute with an
 array that has both 'love' and 'hate' in it. This document will match:
 
-	{ tags => [qw/love indifference hate/] }
+	$document = { tags => [qw/love indifference hate/] }
 
 =head2 THE TYPE CONSTRAINT
 
@@ -206,16 +209,16 @@ actual types available are somewhat different.
 But before we go into the list of available types, let's see a simple
 example:
 
-	{
+	$query = {
 		tags => { '$type' => 'array' },
 		imdb_score => { '$type' => 'int' },
 	}
 
 This will only match documents that have a 'tags' attribute with arrays
-as their values, and an 'imdb_score' value with an integer (but not a float)
-as the value. So, the following document will match:
+as their values, and an 'imdb_score' attribute with integers (but not floats)
+as the values. So, the following document will match:
 
-	{
+	$document_that_matches = {
 		title => 'Fake Title',
 		tags => [qw/comedy drama/],
 		imdb_score => 8,
@@ -223,69 +226,70 @@ as the value. So, the following document will match:
 
 While this document won't:
 
-	{
+	$document_that_doesnt = {
 		title => 'Another Fake Title',
 		tags => [qw/mystery thriller/],
 		imdb_score => 8.5,
 	}
 
-Even though 'tags' is an array, 'imdb_score' is not an integer.
+Even though 'tags' is an array, 'imdb_score' is not an integer, and thus
+the second document will not match.
 
 The following types are available:
 
 =over
 
-=item * 'int' - Matches integers, including negative integers and zero.
+=item * C<int>: matches integers, including negative integers and zero.
 
-=item * 'float' - Matches floating point numbers (like 1.23 or 30, which is also an integer).
+=item * C<float>: matches floating point numbers (like 1.23 or 30, which is also an integer).
 
-=item * 'real' - Matches real numbers (like Pi, which is a rational number).
+=item * C<real>: matches real numbers (like Pi, which is a rational number).
 
-=item * 'whole' - Matches whole numbers, which are positive integers and zero.
+=item * C<whole>: matches whole numbers, which are positive integers and zero (but not negative integers).
 
-=item * 'string' - Matches strings (basically, any scalar value in Perl is a string, including numbers).
+=item * C<string>: matches strings (basically, any scalar value in Perl is a string, including numbers).
 
-=item * 'array' - Matches array references.
+=item * C<array>: matches array references.
 
-=item * 'hash' - Matches hash references.
+=item * C<hash>: matches hash references.
 
-=item * 'bool' - Matches boolean values (everything in Perl is a boolean value, so
+=item * C<bool>: matches boolean values (everything in Perl is a boolean value, so
 every attribute will match this, even those with undefined values, or false
 values such as 0 or the empty string).
 
-=item * 'date' - This will match W3C formatted datetime B<strings>, as described
+=item * C<date>: this will match W3C formatted datetime B<strings>, as described
 by the L<DateTime::Format::W3CDTF> module.
 
-=item * 'null' - This will match documents that have a certain attribute,
+=item * C<null>: this will match documents that have a certain attribute,
 but whose value is undefined (i.e. C<undef>).
 
-=item * 'regex' - This will match regular expressions, such as C<qr/^\d+$/>.
+=item * C<regex>: this will match regular expressions, such as C<qr/^\d+$/>.
 
 =back
 
 =head2 OR QUERIES
 
-As you've probably realised by now. A document need to match every
+As you've probably realized by now, a document needs to match every
 constraint in the query hash-ref. If we were to translate a query hash-ref
-into an SQL C<WHERE> clause, the constraints will be joined with an C<AND>.
+into an SQL C<WHERE> clause, the constraints will be joined with C<AND>.
 
 A query language is really nothing without the ability for C<OR> queries
 (or sub-queries). Just like in MongoDB, the C<$or> construct can be used.
 The usage is simple: you give the query hash-ref a key called C<$or>,
 with a value which is an array reference. This array reference holds
-one or more (well, two or more if you actually want it to mean something)
+one or more (well, two or more if you actually want it to mean anything)
 hash-refs of constraints. For example:
 
-	{
+	$query = {
 		imdb_score => { '$gt' => 7 },
 		'$or' => [
 			{ title => 'Freaks and Geeks' },
 			{ title => 'Undeclared' },
-		]
+		],
 	}
 
 If we were to translate this to an SQL C<WHERE> clause, this is what
-we'll get:
+we'd get:
 
 	WHERE imdb_score > 7 AND (title = 'Freaks and Geeks' OR title = 'Undeclared')
 
@@ -293,16 +297,28 @@ So, in order to match this query, a document needs to have the 'imdb_score'
 attribute with a value larger than 7, and a 'title' attribute with either
 'Freaks and Geeks' or 'Undeclared' as its value.
 
+You might notice we've already done pretty much the same thing with the
+C<$in> constraint. But the C<$in> constraint is very simple, while C<$or>
+can be used for more complex constraints, such as this:
+
+	$query = {
+		'$or' => [
+			{ imdb_score => { '$gte' => 4, '$lte' => 7 } },
+			{ year => { '$gte' => 2000, '$lt' => DateTime->now->year } },
+			{ comments => { '$type' => 'array', '$size' => 100 } },
+		],
+	}
+
 =head1 UPDATE STRUCTURES
 
 Update structures are used to modify the attributes of documents. The keys
 of an update structure are modifiers, and their values are hash-references.
-These hash-refs have one or more attributes as keys, and the actual
+These hash-refs have one or more attributes (of the document) as keys, and the actual
 modifications as the values.
 
 Let's look at a simple example:
 
-	{ '$inc' => { number => 3 } }
+	$update = { '$inc' => { number => 3 } }
 
 This update structure uses the C<$inc> update modifier, and it tells MQUL
 to increase the value of the 'number' attribute by three.
@@ -316,17 +332,17 @@ The following update modifiers are supported:
 Used to increase the value of attributes by a certain amount. This can
 also be used to decrease the attribute, by giving it a negative value.
 
-	{ '$inc' => { to_increase => 2, to_decrease => -2 } }
+	$update = { '$inc' => { to_increase => 2, to_decrease => -2 } }
 
 This will increase 'to_increase' by two and decrease 'to_decrease' by two.
 
 =item * C<$set>
 
 This modifier is used to change the value of an attribute. This is pretty
-simple, and you can give an attribute whatever valu eyou want - scalars,
+simple, and you can give an attribute whatever value you want - scalars,
 data structures, whatever.
 
-	{
+	$update = {
 		'$set' => {
 			title => 'Freaks and Geaks',
 			genre => [qw/comedy drama/],
@@ -335,7 +351,7 @@ data structures, whatever.
 
 Given the following document:
 
-	{
+	$document = {
 		title => 'Death Note',
 		genre => [qw/anime thriller/],
 		imdb_score => 10,
@@ -343,7 +359,7 @@ Given the following document:
 
 Using the update structure on it will yield the following revised document:
 
-	{
+	$document = {
 		title => 'Freaks and Geaks',
 		genre => qw[/comedy drama/],
 		imdb_score => 10,
@@ -354,11 +370,11 @@ Using the update structure on it will yield the following revised document:
 This modifier is used to remove an attribute (or attributes) from a
 document.
 
-	{ '$unset' => { imdb_score => 1 } }
+	$update = { '$unset' => { imdb_score => 1 } }
 
-Will cause the following document:
+This will cause the following document:
 
-	{
+	$document = {
 		title => 'Freaks and Geaks',
 		genre => qw[/comedy drama/],
 		imdb_score => 9.4,
@@ -366,7 +382,7 @@ Will cause the following document:
 
 To turn into this document:
 
-	{
+	$document = {
 		title => 'Freaks and Geaks',
 		genre => qw[/comedy drama/],
 	}
@@ -375,7 +391,7 @@ To turn into this document:
 
 This is used to rename an attribute.
 
-	{ '$rename' => { old_name => 'new_name' } }
+	$update = { '$rename' => { old_name => 'new_name' } }
 
 So if a document had an attribute called 'old_name', after the update the
 attribute will be called 'new_name', but the same value will be retained.
@@ -385,7 +401,7 @@ attribute will be called 'new_name', but the same value will be retained.
 This is used to push a certain value to the end of an attribute that holds
 an array.
 
-	{ '$push' => { tags => 'romance' } }
+	$update = { '$push' => { tags => 'romance' } }
 
 So, if a document had an attribute called 'tags' with the value C<['comedy', 'drama']>,
 after the update 'tags' will be C<['comedy', 'drama', 'romance']>.
@@ -394,35 +410,39 @@ after the update 'tags' will be C<['comedy', 'drama', 'romance']>.
 
 The same as C<$push>, but used to push multiple values at once.
 
-	{ '$pushAll' => { tags => [qw/romance chick_flick/] } }
+	$update = { '$pushAll' => { tags => [qw/romance chick_flick/] } }
 
 =item * C<$addToSet>
 
 The same as C<$push>, but will only push the value to an array attribute
 if it's not already in the array.
 
-	{ '$addToSet' => { tags => 'comedy' } }
+	$update = { '$addToSet' => { tags => 'comedy' } }
 
 This won't do anything for the following document:
 
-	{
+	$document = {
 		title => 'Freaks and Geeks',
 		tags => [qw/comedy drama/],
 	}
 
 C<$addToSet> can also take arrays of values, like C<$pushAll> does.
 
-	{ '$addToSet' => { tags => [qw/romance chick_flick/] } }
+	$update = { '$addToSet' => { tags => [qw/romance chick_flick/] } }
 
 =item * C<$pop>
 
 This modifier will remove the last item in an array attribute.
 
-	{ '$pop' => { tags => 1 } }
+	$update = { '$pop' => { tags => 1 } }
 
 Note that the value you give to the attribute you're modifying (1 in the
 above example) doesn't matter, only one item will be removed, but you
-must give a true value, otherwise nothing will happen.
+must give a true value, otherwise nothing will happen:
+
+	$update = { '$pop' => { tags => 0 } }
+
+The above example won't actually pop anything from the 'tags' attribute.
 
 =item * C<$shift>
 
@@ -434,7 +454,7 @@ note given to C<$pop> above holds true for C<$shift> as well.
 This modifier is used to remove a specific range of indexes from an array
 attribute.
 
-	{ '$splice' => { tags => [3, 2] } }
+	$update = { '$splice' => { tags => [3, 2] } }
 
 This will remove two items from the 'tags' array, starting at offset 3
 (take a look at Perl's C<splice()> function for more info).
@@ -443,7 +463,7 @@ This will remove two items from the 'tags' array, starting at offset 3
 
 This is used to remove a specific value from an array attribute.
 
-	{ '$pull' => { tags => 'comedy' } }
+	$update = { '$pull' => { tags => 'comedy' } }
 
 This will remove 'comedy' from the 'tags' attribute, if it has it.
 
@@ -451,7 +471,7 @@ This will remove 'comedy' from the 'tags' attribute, if it has it.
 
 The same as C<$pull>, but used for pulling multiple values at once.
 
-	{ '$pullAll' => { tags => [qw/comedy drama/] } }
+	$update = { '$pullAll' => { tags => [qw/comedy drama/] } }
 
 =back
 
@@ -473,7 +493,7 @@ The same as C<$pull>, but used for pulling multiple values at once.
 
 =item 6. The dot notation, for querying sub-attributes, is not supported (yet).
 
-=item 7. The C<$type> operator has a complete different structure. See L</"THE TYPE CONSTRAINT">.
+=item 7. The C<$type> operator is very different in MQUL. See L</"THE TYPE CONSTRAINT">.
 
 =back
 

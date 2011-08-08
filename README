@@ -38,12 +38,11 @@ SYNOPSIS
             }
 
 DESCRIPTION
-    MQUL (for MongoDB-style Query & Update Language; pronounced umm, cool -
-    yeah, I know, that's the dumbest thing ever), is a general purpose
-    implementation of MongoDB's query and update language. The
-    implementation is not 100% compatible (it deviates only slightly from
-    MongoDB's behavior, and adds a few operators the original language is
-    missing).
+    MQUL (for MongoDB-style Query & Update Language; pronounced *"umm,
+    cool"*; yeah, I know, that's the dumbest thing ever), is a general
+    purpose implementation of MongoDB's query and update language. The
+    implementation is not 100% compatible, but it only slightly deviates
+    from MongoDB's behavior, actually extending it a bit.
 
     The module exports two functions: "doc_matches()" and "update_doc()".
     The first method takes a document, which is really just a hash-ref (of
@@ -51,18 +50,23 @@ DESCRIPTION
     language. The method will return a true value if the document matches
     the query, and a false value otherwise. The second method takes a
     document and an update hash-ref built in the MQUL update language. The
-    method updates the document (in-place) according to the update hash-ref.
+    method modifies the document (in-place) according to the update
+    hash-ref.
 
     You can use this module for whatever purpose you see fit. It was
-    actually written for Giddy, my Git-database, and was extracted from
-    Giddy's original code.
+    actually written for Giddy, my Git-database, and was extracted from its
+    original code. Outside of the database world, I plan to use it in an
+    application that performs tests (such as process monitoring for
+    example), and uses the query language to determine whether the results
+    are valid or not (in our monitoring example, that could be CPU usage
+    above a certain threshold and stuff like that).
 
   THE LANGUAGE
     The language itself is described in MQUL::Reference. This document only
     describes the interface of this module.
 
-    You should note that MQUL does not yet support MongoDB's dot notation,
-    but I plan to add to support for it in later releases.
+    The reference document also details MQUL's current differences from the
+    original MongoDB language.
 
 INTERFACE
   doc_matches( \%document, [ \%query ] )
@@ -77,7 +81,10 @@ INTERFACE
   update_doc( \%document, \%update )
     Receives a document hash-ref and an update hash-ref, and updates the
     document in-place according to the update hash-ref. Also returns the
-    document after the update.
+    document after the update. If the update hash-ref doesn't have any of
+    the update modifiers described by the language, then the update hash-ref
+    is considered as what the document should now be, and so will simply
+    replace the document hash-ref (once again, in accordance with MongoDB).
 
     See "UPDATE STRUCTURE" in MQUL::Reference to learn about the structure
     of update hash-refs.

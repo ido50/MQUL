@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "0.001001";
+our $VERSION = "0.002";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -124,12 +124,14 @@ sub doc_matches {
 			foreach (@$value) {
 				next unless ref $_ eq 'HASH';
 				my $ok = 1;
+
 				while (my ($k, $v) = each %$_) {
 					unless (&_attribute_matches($doc, $k, $v)) {
 						undef $ok;
 						last;
 					}
 				}
+
 				if ($ok) { # document matches this criteria
 					$found = 1;
 					last;
@@ -163,7 +165,7 @@ sub _attribute_matches {
 	if (!ref $value) {		# if value is a scalar, we need to check for equality
 					# (or, if the attribute is an array in the document,
 					# we need to check the value exists in it)
-		return unless $doc->{$key};
+		return unless defined $doc->{$key};
 		if (ref $doc->{$key} eq 'ARRAY') { # check the array has the requested value
 			return unless &_array_has_eq($value, $doc->{$key});
 		} elsif (!ref $doc->{$key}) { # check the values are equal
@@ -175,7 +177,7 @@ sub _attribute_matches {
 						# for a match (or, if the attribute is an array
 						# in the document, we need to check at least one
 						# value in it matches it)
-		return unless $doc->{$key};
+		return unless defined $doc->{$key};
 		if (ref $doc->{$key} eq 'ARRAY') {
 			return unless &_array_has_re($value, $doc->{$key});
 		} elsif (!ref $doc->{$key}) { # check the values match

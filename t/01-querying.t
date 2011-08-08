@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 68;
+use Test::More tests => 69;
 use MQUL qw/doc_matches/;
 use Try::Tiny;
 
@@ -176,5 +176,18 @@ ok(!doc_matches({
 		{ genre => 'drama' },
 	],
 }), 'or #8 works');
+ok(doc_matches({
+	key_one => 0,
+	key_two => 0,
+	key_three => 'Something',
+}, {
+	'$or' => [
+		{ key_three => 'Cool' },
+		{
+			key_one => 0,
+			key_three => { '$in' => ['Someone', 'Something'] },
+		},
+	],
+}), 'or #9 works');
 
 done_testing();

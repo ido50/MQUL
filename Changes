@@ -1,6 +1,8 @@
 Revision history for MQUL
 
 {{$NEXT}}
+
+0.002     2011-08-12 01:39:48 Asia/Jerusalem
 	- Fixed bug when checking for equality (or regex matching) of false
 	  values like 0 or the empty string
 

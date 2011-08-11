@@ -14,3 +14,4 @@
 ^pod2htm.*\.tmp$
 ^MQUL-.*$
 ^\.build.*$
+^MYMETA\..+$

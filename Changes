@@ -1,6 +1,9 @@
 Revision history for MQUL
 
 {{$NEXT}}
+	- Added support for comparing MongoDB::OID objects and MorboDB::OID
+	  objects (MorboDB is an in-memory database mostly-compatible
+	  with MongoDB, available via CPAN)
 
 0.002     2011-08-12 01:39:48 Asia/Jerusalem
 	- Fixed bug when checking for equality (or regex matching) of false

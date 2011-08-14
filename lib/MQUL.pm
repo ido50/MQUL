@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "0.002";
+our $VERSION = "0.003";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -171,6 +171,15 @@ sub _attribute_matches {
 		} elsif (!ref $doc->{$key}) { # check the values are equal
 			return unless $doc->{$key} eq $value;
 		} else { # we can't compare a non-scalar to a scalar, so return false
+			return;
+		}
+	} elsif (blessed $value && (blessed $value eq 'MongoDB::OID' || blessed $value eq 'MorboDB::OID')) {
+		# we're trying to compare MongoDB::OIDs/MorboDB::OIDs
+		# (MorboDB is my in-memory clone of MongoDB)
+		return unless defined $doc->{$key};
+		if (blessed $doc->{$key} && (blessed $doc->{$key} eq 'MongoDB::OID' || blessed $doc->{$key} eq 'MorboDB::OID')) {
+			return unless $doc->{$key}->value eq $value->value;
+		} else {
 			return;
 		}
 	} elsif (ref $value eq 'Regexp') {	# if the value is a regex, we need to check

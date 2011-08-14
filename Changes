@@ -1,6 +1,8 @@
 Revision history for MQUL
 
 {{$NEXT}}
+
+0.003     2011-08-14 23:49:28 Asia/Jerusalem
 	- Added support for comparing MongoDB::OID objects and MorboDB::OID
 	  objects (MorboDB is an in-memory database mostly-compatible
 	  with MongoDB, available via CPAN)

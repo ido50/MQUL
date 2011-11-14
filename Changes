@@ -1,6 +1,9 @@
 Revision history for MQUL
 
 {{$NEXT}}
+	- Added support for dynamically calculated "fake attributes",
+	  such as min(attr1, attr2, attr3), that can be queried as if
+	  they were true attributes of the document.
 
 0.003     2011-08-14 23:49:28 Asia/Jerusalem
 	- Added support for comparing MongoDB::OID objects and MorboDB::OID

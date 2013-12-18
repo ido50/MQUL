@@ -727,7 +727,7 @@ Ido Perlmuter <ido at ido50 dot net>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2011, Ido Perlmuter C<< ido at ido50 dot net >>.
+Copyright (c) 2011-2013, Ido Perlmuter C<< ido at ido50 dot net >>.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself, either version

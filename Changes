@@ -1,21 +1,21 @@
 Revision history for MQUL
 
 {{$NEXT}}
-	- Added support for dynamically calculated "fake attributes",
-	  such as min(attr1, attr2, attr3), that can be queried as if
-	  they were true attributes of the document.
+		- Added support for dynamically calculated "fake attributes",
+		  such as min(attr1, attr2, attr3), that can be queried as if
+		  they were true attributes of the document. See MongoDB::Reference.
 
-0.003     2011-08-14 23:49:28 Asia/Jerusalem
-	- Added support for comparing MongoDB::OID objects and MorboDB::OID
-	  objects (MorboDB is an in-memory database mostly-compatible
-	  with MongoDB, available via CPAN)
+0.003		2011-08-14 23:49:28 Asia/Jerusalem
+		- Added support for comparing MongoDB::OID objects and MorboDB::OID
+		  objects (MorboDB is an in-memory database mostly-compatible
+		  with MongoDB, available via CPAN)
 
-0.002     2011-08-12 01:39:48 Asia/Jerusalem
-	- Fixed bug when checking for equality (or regex matching) of false
-	  values like 0 or the empty string
+0.002		2011-08-12 01:39:48 Asia/Jerusalem
+		- Fixed bug when checking for equality (or regex matching) of false
+		  values like 0 or the empty string
 
-0.001001  2011-06-08 14:34:21 Asia/Jerusalem
-	- Minor documentation fixes and improvements
+0.001001	2011-06-08 14:34:21 Asia/Jerusalem
+		- Minor documentation fixes and improvements
 
-0.001     2011-06-07 22:52:06 Asia/Jerusalem
-	- Initial commit
+0.001		2011-06-07 22:52:06 Asia/Jerusalem
+		- Initial commit

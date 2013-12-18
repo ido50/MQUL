@@ -313,6 +313,38 @@ can be used for more complex constraints, such as this:
 		],
 	}
 
+=head2 DYNAMICALLY CALCULATED ATTRIBUTES
+
+Since version 0.004, C<MQUL> can dynamically calculate "fake attributes", such
+as the minimum of a list of attributes, and query on these as if they were true
+attributes of the document.
+
+For example, consider the following document:
+
+	$document = {
+		one => 1,
+		two => 2,
+		three => 3
+	}
+
+The C<min()> and C<max()> "functions" can be used to query on the minimum and
+maximum of these attributes, respectively:
+
+	$query = { min(one, two, three) => 1 }	# true
+	$query = { max(one, two, three) => 3 }	# true
+	$query = { min(one, two, three) => 2 }	# false
+
+Apart from C<min()> and C<max()>, the C<abs()> function can be used to query
+on the absolute value of an attribute. For example:
+
+	$document = {
+		some_number => -4.3,
+		other_number => 0
+	}
+
+	$query = { abs(some_number) => { '$gt' => 0 } }		# true
+	$query = { abs(some_number) => -4.3 }			# false
+
 =head1 UPDATE STRUCTURES
 
 Update structures are used to modify the attributes of documents. The keys

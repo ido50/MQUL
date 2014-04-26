@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "0.004";
+our $VERSION = "1.000000";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -68,12 +68,12 @@ purpose implementation of L<MongoDB>'s query and update language. The
 implementation is not 100% compatible, but it only slightly deviates from
 MongoDB's behavior, actually extending it a bit.
 
-The module exports two functions: C<doc_matches()> and C<update_doc()>.
-The first method takes a document, which is really just a hash-ref (of
-whatever complexity), and a query hash-ref built in the MQUL query language. The
-method will return a true value if the document matches the query, and a
-false value otherwise. The second method takes a document and an update
-hash-ref built in the MQUL update language. The method modifies the document
+The module exports two subroutines: C<doc_matches()> and C<update_doc()>.
+The first subroutine takes a document, which is really just a hash-ref (of
+whatever complexity), and a query hash-ref built in the MQUL query language.
+It returns a true value if the document matches the query, and a
+false value otherwise. The second subroutine takes a document and an update
+hash-ref built in the MQUL update language. The subroutine modifies the document
 (in-place) according to the update hash-ref.
 
 You can use this module for whatever purpose you see fit. It was actually
@@ -660,7 +660,7 @@ sub _inject_function {
 =item C<< MQUL::doc_matches() requires a document hash-ref. >>
 
 This error means that you've either haven't passed the C<doc_matches()>
-method any parameters, or given it a non-hash-ref document.
+subroutine any parameters, or given it a non-hash-ref document.
 
 =item C<< MQUL::doc_matches() expects a query hash-ref. >>
 
@@ -671,11 +671,11 @@ query variable, if you do, it has to be a hash-ref.
 =item C<< MQUL::update_doc() requires a document hash-ref. >>
 
 This error means that you've either haven't passed the C<update_doc()>
-method any parameters, or given it a non-hash-ref document.
+subroutine any parameters, or given it a non-hash-ref document.
 
 =item C<< MQUL::update_doc() requires an update hash-ref. >>
 
-This error means that you've passed the C<update_doc()> method a
+This error means that you've passed the C<update_doc()> subroutine a
 non-hash-ref update variable.
 
 =item C<< The %s attribute is not an array in the doc. >>
@@ -683,7 +683,7 @@ non-hash-ref update variable.
 This error means that your update hash-ref tries to modify an array attribute
 (with C<$push>, C<$pushAll>, C<$addToSet>, C<$pull>, C<$pullAll>,
 C<$pop>, C<$shift> and C<$splice>), but the attribute in the document
-provided to the C<update_doc()> method is not an array.
+provided to the C<update_doc()> subroutine is not an array.
 
 =back
 
@@ -727,7 +727,7 @@ Ido Perlmuter <ido at ido50 dot net>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2011-2013, Ido Perlmuter C<< ido at ido50 dot net >>.
+Copyright (c) 2011-2014, Ido Perlmuter C<< ido at ido50 dot net >>.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself, either version

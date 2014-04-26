@@ -1,6 +1,30 @@
 Revision history for MQUL
 
+TODO:
+	- dot notation
+	- new query operators from MongoDB
+		$not: { $gt: 1 }, $not: qr/asdf/
+		$nor: [ { query }, { query } ]
+		$regex: 'acme', $options: 'i'
+		$text
+		$size with ranges
+	- new update modifiers from MongoDB
+		$mul
+		new $push stuff
+		$setOnInsert
+		$min
+		$max
+		$currentDate
+		$pushAll deprecated
+		$each
+		$slice
+		$sort
+		$position
+		$bit
+
 {{$NEXT}}
+
+0.004     2013-12-19 01:08:11 Asia/Jerusalem
 		- Added support for dynamically calculated "fake attributes",
 		  such as min(attr1, attr2, attr3), that can be queried as if
 		  they were true attributes of the document. See MongoDB::Reference.

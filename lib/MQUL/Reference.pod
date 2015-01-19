@@ -313,6 +313,30 @@ can be used for more complex constraints, such as this:
 		],
 	}
 
+=head2 THE DOT NOTATION
+
+Since version 1.0.0, C<MQUL> supports the dot notation for querying against
+sub-fields and even array items. For example, if we look at the following document:
+
+	$document = {
+		some => { thing => { very => { deep => 3 } } },
+		array => { of => { hashes => [  { one => 1 }, { two => 2 } ] } }
+	}
+
+All of these queries will return true:
+
+	$query = { 'some.thing.very.deep' => 3 }
+
+	$query = { 'some.thing.very.deep' => { '$gt' => 2, '$lt' => 4 } }
+
+	$query = { 'array.of.hashes' => { '$type' => 'array' } }
+
+	$query = { 'array.of.hashes.0' => { '$type' => 'hash' } }
+
+	$query = { 'array.of.hashes.1.two' => { '$exists' => 1 } }
+
+	$query = { 'some.thing.that.doesnt.exist' => { '$exists' => 0 } }
+
 =head2 DYNAMICALLY CALCULATED ATTRIBUTES
 
 Since version 0.004, C<MQUL> can dynamically calculate "fake attributes", such
@@ -330,9 +354,9 @@ For example, consider the following document:
 The C<min()> and C<max()> "functions" can be used to query on the minimum and
 maximum of these attributes, respectively:
 
-	$query = { min(one, two, three) => 1 }	# true
-	$query = { max(one, two, three) => 3 }	# true
-	$query = { min(one, two, three) => 2 }	# false
+	$query = { 'min(one, two, three)' => 1 }	# true
+	$query = { 'max(one, two, three)' => 3 }	# true
+	$query = { 'min(one, two, three)' => 2 }	# false
 
 Apart from C<min()> and C<max()>, the C<abs()> function can be used to query
 on the absolute value of an attribute. For example:
@@ -342,8 +366,24 @@ on the absolute value of an attribute. For example:
 		other_number => 0
 	}
 
-	$query = { abs(some_number) => { '$gt' => 0 } }		# true
-	$query = { abs(some_number) => -4.3 }			# false
+	$query = { 'abs(some_number)' => { '$gt' => 0 } }		# true
+	$query = { 'abs(some_number)' => -4.3 }			# false
+
+These functions also support the dot notation, so the following document will
+match all of the listed queries:
+
+	$document = {
+		numbers => {
+			one => 35,
+			two => -65,
+			three => 100
+		},
+		array_of_numbers => [80, 90]
+	}
+
+	$query = { 'min(numbers.one, numbers.two, numbers.three')' => -65 }
+	$query = { 'abs(numbers.two)' => 65 }
+	$query = { 'max(array_of_numbers.1, numbers.three)' => { '$gt' => 90 } }
 
 =head1 UPDATE STRUCTURES
 
@@ -527,9 +567,7 @@ The same as C<$pull>, but used for pulling multiple values at once.
 
 =item 5. The direct equality constraint can also compare complex data structures in MQUL. See L</"THE EQUALITY CONSTRAINT">.
 
-=item 6. The dot notation, for querying sub-attributes, is not supported (yet).
-
-=item 7. The C<$type> operator is very different in MQUL. See L</"THE TYPE CONSTRAINT">.
+=item 6. The C<$type> operator is very different in MQUL. See L</"THE TYPE CONSTRAINT">.
 
 =back
 
@@ -551,7 +589,7 @@ Ido Perlmuter <ido at ido50 dot net>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2011-2013, Ido Perlmuter C<< ido at ido50 dot net >>.
+Copyright (c) 2011-2015, Ido Perlmuter C<< ido at ido50 dot net >>.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself, either version

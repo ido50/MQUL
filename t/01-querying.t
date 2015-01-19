@@ -1,6 +1,6 @@
-#!perl -T
+#!/usr/bin/env perl
 
-use Test::More tests => 73;
+use Test::More tests => 92;
 use MQUL qw/doc_matches/;
 use Try::Tiny;
 
@@ -195,5 +195,179 @@ ok(doc_matches({ one => 1, two => 2, three => 3 }, { 'min(one, two, three)' => 1
 ok(doc_matches({ one => 1, two => 2, three => 3 }, { 'max(one, two, three)' => 3 }), 'max() seems to work with simple equality');
 ok(doc_matches({ one => 1, two => 2, three => 3 }, { 'max(one, two, three)' => { '$gt' => 2, '$lt' => 4 } }), 'max() seems to work with complex ranging');
 ok(doc_matches({ some_value => -5.94 }, { 'abs(some_value)' => { '$gte' => 5, '$lte' => 6 } }), 'abs() seems to work');
+
+# let's check the dot notation
+ok(
+	doc_matches(
+		{ some => { thing => { very => { deep => 3 } }, other_thing => 1 } },
+		{ 'some.thing.very.deep' => { '$gt' => 2 } }
+	),
+	'dot notation works on simple nested hash'
+);
+
+ok(
+	doc_matches(
+		{ some => { thing => 1 } },
+		{ 'some.thing.very.deep' => { '$exists' => 0 } }
+	),
+	'dot notation doesn\'t die on long nesting that doesn\'t exist'
+);
+
+ok(
+	doc_matches(
+		{ some => { thing => [1, 2, 3] } },
+		{ 'some.thing' => { '$size' => 3 } }
+	),
+	'dot notation gets correct size of array'
+);
+
+ok(
+	!doc_matches(
+		{ hey => { man => 1 } },
+		{ 'hey.man.what' => 3 }
+	),
+	'dot notation doesn\'t die on bad nesting'
+);
+
+# let's try the dot notation with arrays
+ok(
+	doc_matches(
+		{ some => { thing => [5, 0, 5] } },
+		{ 'some.thing.1' => { '$lt' => 1 } }
+	),
+	'dot notation works with arrays #1'
+);
+
+ok(
+	!doc_matches(
+		{ some => { thing => [5, 0, 5] } },
+		{ 'some.thing.1' => { '$gt' => 1 } }
+	),
+	'dot notation works with arrays #2'
+);
+
+ok(
+	doc_matches(
+		{ some => { thing => [ { zero => 0 }, { one => 1 }, { two => 2 } ] } },
+		{ 'some.thing.1.one' => { '$exists' => 1 } }
+	),
+	'dot notation works with arrays of hashes #1'
+);
+
+ok(
+	!doc_matches(
+		{ some => { thing => [ { zero => 0 }, { one => 1 }, { two => 2 } ] } },
+		{ 'some.thing.1.zero' => { '$exists' => 1 } }
+	),
+	'dot notation works with arrays of hashes #2'
+);
+
+ok(
+	doc_matches(
+		{ one => { value => 3.25 }, two => { value => 5.75 } },
+		{ 'two.value' => { '$ne' => 3.25 }, 'one.value' => { '$type' => 'float' }, 'one.missing' => { '$exists' => 0 } }
+	),
+	'dot notation works with multiple complex queries'
+);
+
+ok(
+	doc_matches(
+		{ one => { value => 3.25 }, two => { value => 5.75 } },
+		{ '$or' => [ { 'one.value' => { '$gt' => 4 } }, { 'two.value' => { '$gt' => 4 } } ] }
+	),
+	'dot notation works with $or queries #1'
+);
+
+ok(
+	!doc_matches(
+		{ one => { value => 3.25 }, two => { value => 5.75 } },
+		{ '$or' => [ { 'one.value' => { '$gt' => 4 } }, { 'two.value' => { '$gt' => 6 } } ] }
+	),
+	'dot notation works with $or queries #2'
+);
+
+ok(
+	doc_matches(
+		{ one => { value => -3.5 } },
+		{ 'abs(one.value)' => 3.5 }
+	),
+	'dot notation works with simple abs()'
+);
+
+ok(
+	doc_matches(
+		{ one => { value => 3.25 }, two => { value => 5.75 } },
+		{ 'max(one.value, two.value)' => 5.75 }
+	),
+	'dot notation works with max() #1'
+);
+
+ok(
+	!doc_matches(
+		{ one => { value => 3.25 }, two => { value => 5.75 } },
+		{ 'max(one.value, two.value)' => 3.25 }
+	),
+	'dot notation works with max() #2'
+);
+
+ok(
+	doc_matches(
+		{ one => { array => [{ value => 1 }] }, two => { array => [{ value => 2 }] } },
+		{ 'min(one.array.0.value, two.array.0.value)' => { '$gte' => 1, '$lt' => 2 } }
+	),
+	'dot notation works with functions and arrays #1'
+);
+
+ok(
+	!doc_matches(
+		{ one => { array => [{ value => 1 }] }, two => { array => [{ value => 2 }] } },
+		{ 'min(one.array.0.value, two.array.0.value)' => { '$gt' => 1, '$lt' => 2 } }
+	),
+	'dot notation works with functions and arrays #2'
+);
+
+ok(
+	doc_matches(
+		{
+			some => { thing => { very => { deep => 3 } } },
+			array => { of => { hashes => [  { one => 1 }, { two => 2 } ] } }
+		},
+		{
+			'array.of.hashes' => { '$type' => 'array' },
+			'array.of.hashes.0' => { '$type' => 'hash' }
+		}
+	),
+	'dot notation returns proper types'
+);
+
+ok(
+	doc_matches(
+		{
+			numbers => {
+				one => 35,
+				two => -65,
+				three => 100
+			},
+			array_of_numbers => [80, 90]
+		},
+		{ 'max(array_of_numbers.1, numbers.three)' => { '$gt' => 90 } }
+	),
+	'max with dot notation from different fields works'
+);
+
+ok(
+	!doc_matches(
+		{
+			numbers => {
+				one => 35,
+				two => -65,
+				three => 100
+			},
+			array_of_numbers => [80, 90]
+		},
+		{ 'max(array_of_numbers.1, numbers.three)' => 90 }
+	),
+	'max with dot notation from different fields works'
+);
 
 done_testing();

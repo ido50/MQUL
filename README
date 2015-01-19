@@ -10,6 +10,7 @@ SYNOPSIS
                     imdb_score => 9.4,
                     seasons => 1,
                     starring => ['Linda Cardellini', 'James Franco', 'Jason Segel'],
+                    likes => { up => 45, down => 11 }
             };
 
             if (doc_matches($doc, {
@@ -17,6 +18,7 @@ SYNOPSIS
                     genres => 'comedy',
                     imdb_score => { '$gte' => 5, '$lte' => 9.5 },
                     starring => { '$type' => 'array', '$size' => 3 },
+                    'likes.up' => { '$gt' => 40 }
             })) {
                     # will be true in this example
             }
@@ -35,6 +37,7 @@ SYNOPSIS
                     genres => ['comedy'],
                     imdb_score => 10,
                     starring => ['Linda Cardellini', 'James Franco', 'Jason Segel', 'John Francis Daley'],
+                    likes => { up => 45, down => 11 }
             }
 
 DESCRIPTION
@@ -44,14 +47,13 @@ DESCRIPTION
     implementation is not 100% compatible, but it only slightly deviates
     from MongoDB's behavior, actually extending it a bit.
 
-    The module exports two functions: "doc_matches()" and "update_doc()".
-    The first method takes a document, which is really just a hash-ref (of
-    whatever complexity), and a query hash-ref built in the MQUL query
-    language. The method will return a true value if the document matches
-    the query, and a false value otherwise. The second method takes a
-    document and an update hash-ref built in the MQUL update language. The
-    method modifies the document (in-place) according to the update
-    hash-ref.
+    The module exports two subroutines: "doc_matches()" and "update_doc()".
+    The first subroutine takes a document, which is really just a hash-ref
+    (of whatever complexity), and a query hash-ref built in the MQUL query
+    language. It returns a true value if the document matches the query, and
+    a false value otherwise. The second subroutine takes a document and an
+    update hash-ref built in the MQUL update language. The subroutine
+    modifies the document (in-place) according to the update hash-ref.
 
     You can use this module for whatever purpose you see fit. It was
     actually written for Giddy, my Git-database, and was extracted from its
@@ -59,7 +61,8 @@ DESCRIPTION
     application that performs tests (such as process monitoring for
     example), and uses the query language to determine whether the results
     are valid or not (in our monitoring example, that could be CPU usage
-    above a certain threshold and stuff like that).
+    above a certain threshold and stuff like that). It is also used by
+    MorboDB, an in-memory clone of MongoDB.
 
   THE LANGUAGE
     The language itself is described in MQUL::Reference. This document only
@@ -92,8 +95,8 @@ INTERFACE
 DIAGNOSTICS
     "MQUL::doc_matches() requires a document hash-ref."
         This error means that you've either haven't passed the
-        "doc_matches()" method any parameters, or given it a non-hash-ref
-        document.
+        "doc_matches()" subroutine any parameters, or given it a
+        non-hash-ref document.
 
     "MQUL::doc_matches() expects a query hash-ref."
         This error means that you've passed the "doc_matches()" attribute a
@@ -102,18 +105,18 @@ DIAGNOSTICS
 
     "MQUL::update_doc() requires a document hash-ref."
         This error means that you've either haven't passed the
-        "update_doc()" method any parameters, or given it a non-hash-ref
+        "update_doc()" subroutine any parameters, or given it a non-hash-ref
         document.
 
     "MQUL::update_doc() requires an update hash-ref."
-        This error means that you've passed the "update_doc()" method a
+        This error means that you've passed the "update_doc()" subroutine a
         non-hash-ref update variable.
 
     "The %s attribute is not an array in the doc."
         This error means that your update hash-ref tries to modify an array
         attribute (with $push, $pushAll, $addToSet, $pull, $pullAll, $pop,
         $shift and $splice), but the attribute in the document provided to
-        the "update_doc()" method is not an array.
+        the "update_doc()" subroutine is not an array.
 
 CONFIGURATION AND ENVIRONMENT
     MQUL requires no configuration files or environment variables.
@@ -145,7 +148,7 @@ AUTHOR
     Ido Perlmuter <ido at ido50 dot net>
 
 LICENSE AND COPYRIGHT
-    Copyright (c) 2011, Ido Perlmuter "ido at ido50 dot net".
+    Copyright (c) 2011-2015, Ido Perlmuter "ido at ido50 dot net".
 
     This module is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself, either version 5.8.1 or any later

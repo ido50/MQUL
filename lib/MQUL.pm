@@ -33,6 +33,7 @@ MQUL - General purpose, MongoDB-style query and update language
 		imdb_score => 9.4,
 		seasons => 1,
 		starring => ['Linda Cardellini', 'James Franco', 'Jason Segel'],
+		likes => { up => 45, down => 11 }
 	};
 
 	if (doc_matches($doc, {
@@ -40,6 +41,7 @@ MQUL - General purpose, MongoDB-style query and update language
 		genres => 'comedy',
 		imdb_score => { '$gte' => 5, '$lte' => 9.5 },
 		starring => { '$type' => 'array', '$size' => 3 },
+		'likes.up' => { '$gt' => 40 }
 	})) {
 		# will be true in this example
 	}
@@ -58,6 +60,7 @@ MQUL - General purpose, MongoDB-style query and update language
 		genres => ['comedy'],
 		imdb_score => 10,
 		starring => ['Linda Cardellini', 'James Franco', 'Jason Segel', 'John Francis Daley'],
+		likes => { up => 45, down => 11 }
 	}
 
 =head1 DESCRIPTION
@@ -127,13 +130,10 @@ sub doc_matches {
 				my $ok = 1;
 
 				while (my ($k, $v) = each %$_) {
-					&_inject_function($doc, $k) if $k =~ m/^(abs|min|max)\(([^)]+)\)$/;
 					unless (&_attribute_matches($doc, $k, $v)) {
 						undef $ok;
-						delete $doc->{$k} if $k =~ m/^(abs|min|max)\(([^)]+)\)$/;
 						last;
 					}
-					delete $doc->{$k} if $k =~ m/^(abs|min|max)\(([^)]+)\)$/;
 				}
 
 				if ($ok) { # document matches this criteria
@@ -143,9 +143,7 @@ sub doc_matches {
 			}
 			return unless $found;
 		} else {
-			&_inject_function($doc, $key) if $key =~ m/^(abs|min|max)\(([^)]+)\)$/;
 			return unless &_attribute_matches($doc, $key, $value);
-			delete $doc->{$key} if $key =~ m/^(abs|min|max)\(([^)]+)\)$/;
 		}
 	}
 
@@ -168,35 +166,51 @@ sub doc_matches {
 sub _attribute_matches {
 	my ($doc, $key, $value) = @_;
 
-	if (!ref $value) {		# if value is a scalar, we need to check for equality
+	my %virt;
+	if ($key =~ m/^(abs|min|max)\(([^)]+)\)$/) {
+		# support for virtual functions
+		$virt{$key} = _parse_function($doc, $key);
+	} elsif ($key =~ m/\./) {
+		# support for the dot notation
+		my ($v, $k) = _expand_dot_notation($doc, $key);
+
+		$key = $k;
+		$virt{$key} = $v
+			if defined $v;
+	} else {
+		$virt{$key} = $doc->{$key}
+			if exists $doc->{$key};
+	}
+
+	if (!ref $value) {	# if value is a scalar, we need to check for equality
 					# (or, if the attribute is an array in the document,
 					# we need to check the value exists in it)
-		return unless defined $doc->{$key};
-		if (ref $doc->{$key} eq 'ARRAY') { # check the array has the requested value
-			return unless &_array_has_eq($value, $doc->{$key});
-		} elsif (!ref $doc->{$key}) { # check the values are equal
-			return unless $doc->{$key} eq $value;
+		return unless defined $virt{$key};
+		if (ref $virt{$key} eq 'ARRAY') { # check the array has the requested value
+			return unless &_array_has_eq($value, $virt{$key});
+		} elsif (!ref $virt{$key}) { # check the values are equal
+			return unless $virt{$key} eq $value;
 		} else { # we can't compare a non-scalar to a scalar, so return false
 			return;
 		}
 	} elsif (blessed $value && (blessed $value eq 'MongoDB::OID' || blessed $value eq 'MorboDB::OID')) {
 		# we're trying to compare MongoDB::OIDs/MorboDB::OIDs
 		# (MorboDB is my in-memory clone of MongoDB)
-		return unless defined $doc->{$key};
-		if (blessed $doc->{$key} && (blessed $doc->{$key} eq 'MongoDB::OID' || blessed $doc->{$key} eq 'MorboDB::OID')) {
-			return unless $doc->{$key}->value eq $value->value;
+		return unless defined $virt{$key};
+		if (blessed $virt{$key} && (blessed $virt{$key} eq 'MongoDB::OID' || blessed $virt{$key} eq 'MorboDB::OID')) {
+			return unless $virt{$key}->value eq $value->value;
 		} else {
 			return;
 		}
 	} elsif (ref $value eq 'Regexp') {	# if the value is a regex, we need to check
-						# for a match (or, if the attribute is an array
-						# in the document, we need to check at least one
-						# value in it matches it)
-		return unless defined $doc->{$key};
-		if (ref $doc->{$key} eq 'ARRAY') {
-			return unless &_array_has_re($value, $doc->{$key});
-		} elsif (!ref $doc->{$key}) { # check the values match
-			return unless $doc->{$key} =~ $value;
+							# for a match (or, if the attribute is an array
+							# in the document, we need to check at least one
+							# value in it matches it)
+		return unless defined $virt{$key};
+		if (ref $virt{$key} eq 'ARRAY') {
+			return unless &_array_has_re($value, $virt{$key});
+		} elsif (!ref $virt{$key}) { # check the values match
+			return unless $virt{$key} =~ $value;
 		} else { # we can't compare a non-scalar to a scalar, so return false
 			return;
 		}
@@ -208,7 +222,7 @@ sub _attribute_matches {
 			# queries, we need to check our document
 			# has an attributes with exactly the same hash-ref
 			# (and name of course)
-			return unless Compare($value, $doc->{$key});
+			return unless Compare($value, $virt{$key});
 		} else {
 			# value contains advanced queries,
 			# we need to make sure our document has an
@@ -217,97 +231,97 @@ sub _attribute_matches {
 			foreach my $q (keys %$value) {
 				my $term = $value->{$q};
 				if ($q eq '$gt') {
-					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if (is_float($doc->{$key})) {
-						return unless $doc->{$key} > $term;
+					return unless defined $virt{$key} && !ref $virt{$key};
+					if (is_float($virt{$key})) {
+						return unless $virt{$key} > $term;
 					} else {
-						return unless $doc->{$key} gt $term;
+						return unless $virt{$key} gt $term;
 					}
 				} elsif ($q eq '$gte') {
-					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if (is_float($doc->{$key})) {
-						return unless $doc->{$key} >= $term;
+					return unless defined $virt{$key} && !ref $virt{$key};
+					if (is_float($virt{$key})) {
+						return unless $virt{$key} >= $term;
 					} else {
-						return unless $doc->{$key} ge $term;
+						return unless $virt{$key} ge $term;
 					}
 				} elsif ($q eq '$lt') {
-					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if (is_float($doc->{$key})) {
-						return unless $doc->{$key} < $term;
+					return unless defined $virt{$key} && !ref $virt{$key};
+					if (is_float($virt{$key})) {
+						return unless $virt{$key} < $term;
 					} else {
-						return unless $doc->{$key} lt $term;
+						return unless $virt{$key} lt $term;
 					}
 				} elsif ($q eq '$lte') {
-					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if (is_float($doc->{$key})) {
-						return unless $doc->{$key} <= $term;
+					return unless defined $virt{$key} && !ref $virt{$key};
+					if (is_float($virt{$key})) {
+						return unless $virt{$key} <= $term;
 					} else {
-						return unless $doc->{$key} le $term;
+						return unless $virt{$key} le $term;
 					}
 				} elsif ($q eq '$eq') {
-					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if (is_float($doc->{$key})) {
-						return unless $doc->{$key} == $term;
+					return unless defined $virt{$key} && !ref $virt{$key};
+					if (is_float($virt{$key})) {
+						return unless $virt{$key} == $term;
 					} else {
-						return unless $doc->{$key} eq $term;
+						return unless $virt{$key} eq $term;
 					}
 				} elsif ($q eq '$ne') {
-					return unless defined $doc->{$key} && !ref $doc->{$key};
-					if (is_float($doc->{$key})) {
-						return unless $doc->{$key} != $term;
+					return unless defined $virt{$key} && !ref $virt{$key};
+					if (is_float($virt{$key})) {
+						return unless $virt{$key} != $term;
 					} else {
-						return unless $doc->{$key} ne $term;
+						return unless $virt{$key} ne $term;
 					}
 				} elsif ($q eq '$exists') {
 					if ($term) {
-						return unless exists $doc->{$key};
+						return unless exists $virt{$key};
 					} else {
-						return if exists $doc->{$key};
+						return if exists $virt{$key};
 					}
 				} elsif ($q eq '$mod' && ref $term eq 'ARRAY' && scalar @$term == 2) {
-					return unless defined $doc->{$key} && is_float($doc->{$key}) && $doc->{$key} % $term->[0] == $term->[1];
+					return unless defined $virt{$key} && is_float($virt{$key}) && $virt{$key} % $term->[0] == $term->[1];
 				} elsif ($q eq '$in' && ref $term eq 'ARRAY') {
-					return unless defined $doc->{$key} && &_value_in($doc->{$key}, $term);
+					return unless defined $virt{$key} && &_value_in($virt{$key}, $term);
 				} elsif ($q eq '$nin' && ref $term eq 'ARRAY') {
-					return unless defined $doc->{$key} && !&_value_in($doc->{$key}, $term);
+					return unless defined $virt{$key} && !&_value_in($virt{$key}, $term);
 				} elsif ($q eq '$size' && is_int($term)) {
-					return unless defined $doc->{$key} && ((ref $doc->{$key} eq 'ARRAY' && scalar @{$doc->{$key}} == $term) || (ref $doc->{$key} eq 'HASH' && scalar keys %{$doc->{$key}} == $term));
+					return unless defined $virt{$key} && ((ref $virt{$key} eq 'ARRAY' && scalar @{$virt{$key}} == $term) || (ref $virt{$key} eq 'HASH' && scalar keys %{$virt{$key}} == $term));
 				} elsif ($q eq '$all' && ref $term eq 'ARRAY') {
-					return unless defined $doc->{$key} && ref $doc->{$key} eq 'ARRAY';
+					return unless defined $virt{$key} && ref $virt{$key} eq 'ARRAY';
 					foreach (@$term) {
-						return unless &_value_in($_, $doc->{$key});
+						return unless &_value_in($_, $virt{$key});
 					}
 				} elsif ($q eq '$type' && !ref $term) {
 					if ($term eq 'int') {
-						return unless defined $doc->{$key} && is_int($doc->{$key});
+						return unless defined $virt{$key} && is_int($virt{$key});
 					} elsif ($term eq 'float') {
-						return unless defined $doc->{$key} && is_float($doc->{$key});
+						return unless defined $virt{$key} && is_float($virt{$key});
 					} elsif ($term eq 'real') {
-						return unless defined $doc->{$key} && is_real($doc->{$key});
+						return unless defined $virt{$key} && is_real($virt{$key});
 					} elsif ($term eq 'whole') {
-						return unless defined $doc->{$key} && is_whole($doc->{$key});
+						return unless defined $virt{$key} && is_whole($virt{$key});
 					} elsif ($term eq 'string') {
-						return unless defined $doc->{$key} && is_string($doc->{$key});
+						return unless defined $virt{$key} && is_string($virt{$key});
 					} elsif ($term eq 'array') {
-						return unless defined $doc->{$key} && ref $doc->{$key} eq 'ARRAY';
+						return unless defined $virt{$key} && ref $virt{$key} eq 'ARRAY';
 					} elsif ($term eq 'hash') {
-						return unless defined $doc->{$key} && ref $doc->{$key} eq 'HASH';
+						return unless defined $virt{$key} && ref $virt{$key} eq 'HASH';
 					} elsif ($term eq 'bool') {
 						# boolean - not really supported, will always return true since everything in Perl is a boolean
 					} elsif ($term eq 'date') {
-						return unless defined $doc->{$key} && !ref $doc->{$key};
-						my $date = try { DateTime::Format::W3CDTF->parse_datetime($doc->{$key}) } catch { undef };
+						return unless defined $virt{$key} && !ref $virt{$key};
+						my $date = try { DateTime::Format::W3CDTF->parse_datetime($virt{$key}) } catch { undef };
 						return unless blessed $date && blessed $date eq 'DateTime';
 					} elsif ($term eq 'null') {
-						return unless exists $doc->{$key} && !defined $doc->{$key};
+						return unless exists $virt{$key} && !defined $virt{$key};
 					} elsif ($term eq 'regex') {
-						return unless defined $doc->{$key} && ref $doc->{$key} eq 'Regexp';
+						return unless defined $virt{$key} && ref $virt{$key} eq 'Regexp';
 					}
 				}
 			}
 		}
 	} elsif (ref $value eq 'ARRAY') {
-		return unless Compare($value, $doc->{$key});
+		return unless Compare($value, $virt{$key});
 	}
 
 	return 1;
@@ -626,7 +640,7 @@ sub _max {
 }
 
 ##############################################
-# _inject_function( $doc, $key )             #
+# _parse_function( $doc, $key )              #
 # ========================================== #
 # $doc - the document                        #
 # $key - the key referencing a function and  #
@@ -634,23 +648,67 @@ sub _max {
 #        min(attr1, attr2, attr3)            #
 # ------------------------------------------ #
 # calculates the value using the appropriate #
-# function and injects it into the document  #
-# as if it were a true attribute of it (it   #
-# is later removed from the document)        #
+# function and returns the result            #
 ##############################################
 
-sub _inject_function {
+sub _parse_function {
 	my ($doc, $key) = @_;
 
 	my ($func, @attrs) = ($1, split(/,\s*/, $2));
-	my @vals = map { $doc->{$_} } @attrs;
-	if ($func eq 'abs') {
-		$doc->{$key} = abs shift @vals;
-	} elsif ($func eq 'min') {
-		$doc->{$key} = &_min(@vals);
-	} else {
-		$doc->{$key} = &_max(@vals);
+
+	my @vals;
+	foreach (@attrs) {
+		my ($v, $k) = _expand_dot_notation($doc, $_);
+		push(@vals, $v)
+			if defined $v;
 	}
+
+	if ($func eq 'abs') {
+		return abs shift @vals;
+	} elsif ($func eq 'min') {
+		return &_min(@vals);
+	} else {
+		return &_max(@vals);
+	}
+}
+
+##############################################
+# _expand_dot_notation( $doc, $key )         #
+# ========================================== #
+# $doc - the document                        #
+# $key - the key using dot notation          #
+# ------------------------------------------ #
+# takes a key using the dot notation, and    #
+# returns the value of the document at the   #
+# end of the chain (if any), plus the key at #
+# the end of the chain.                      #
+##############################################
+
+sub _expand_dot_notation {
+	my ($doc, $key) = @_;
+
+	return ($doc->{$key}, $key)
+		unless $key =~ m/\./;
+
+	my @way_there = split(/\./, $key);
+
+	$key = shift @way_there;
+	my %virt = ( $key => $doc->{$key} );
+
+	while (scalar @way_there) {
+		$key = shift @way_there;
+		my ($have) = values %virt;
+
+		if ($have && ref $have eq 'HASH' && exists $have->{$key}) {
+			%virt = ( $key => $have->{$key} );
+		} elsif ($have && ref $have eq 'ARRAY' && $key =~ m/^\d+$/ && scalar @$have > $key) {
+			%virt = ( $key => $have->[$key] )
+		} else {
+			%virt = ();
+		}
+	}
+
+	return ($virt{$key}, $key);
 }
 
 =head1 DIAGNOSTICS
@@ -727,7 +785,7 @@ Ido Perlmuter <ido at ido50 dot net>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2011-2014, Ido Perlmuter C<< ido at ido50 dot net >>.
+Copyright (c) 2011-2015, Ido Perlmuter C<< ido at ido50 dot net >>.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself, either version

@@ -1,4 +1,4 @@
-#!perl -T
+#!/usr/bin/env perl
 
 use Test::More tests => 20;
 use MQUL qw/update_doc/;

@@ -1,6 +1,14 @@
 Revision history for MQUL
 
 {{$NEXT}}
+		- Changed the way dynamically calculated attributes work, now they
+		  are defined in a third parameter to doc_matches(), which allows
+		  for greater flexibility, and also calculating attributes from other
+		  calculated attributes. See "DYNAMICALLY CALCULATED ATTRIBUTES" under
+		  MQUL::Reference.
+		- More dynamic functions added, such as $diff, $sum, $product, etc.
+
+1.000000  2015-01-19 22:27:07+02:00 Asia/Jerusalem
 		- Added support for the dot notation in queries, to query sub-fields,
 		  even in dynamically calculated functions
 		- Bumped version to 1.0.0

@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "1.000000";
+our $VERSION = "2.000000";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -88,6 +88,12 @@ monitoring example, that could be CPU usage above a certain threshold and
 stuff like that). It is also used by L<MorboDB>, an in-memory clone of
 MongoDB.
 
+=head2 UPGRADE NOTES
+
+My distributions follow the L<semantic versioning scheme|http://semver.org/>,
+so whenever the major version changes, that means that API changes incompatible
+with previous versions have been made. Always read the Changes file before upgrading.
+
 =head2 THE LANGUAGE
 
 The language itself is described in L<MQUL::Reference>. This document
@@ -96,9 +102,112 @@ only describes the interface of this module.
 The reference document also details MQUL's current differences from the
 original MongoDB language.
 
+=cut
+
+our %BUILTINS = (
+	'$abs' => sub {
+		##############################################
+		# abs( $value )                              #
+		# ========================================== #
+		# $value - a numerical value                 #
+		# ------------------------------------------ #
+		# returns the absolute value of $value       #
+		##############################################
+		abs shift;
+	},
+	'$min' => sub {
+		##############################################
+		# min( @values )                             #
+		# ========================================== #
+		# @values - a list of numerical values       #
+		# ------------------------------------------ #
+		# returns the smallest number in @values     #
+		##############################################
+		my $min = shift;
+		foreach (@_) {
+			$min = $_ if $_ < $min;
+		}
+		return $min;
+	},
+	'$max' => sub {
+		##############################################
+		# max( @values )                             #
+		# ========================================== #
+		# @values - a list of numerical values       #
+		# ------------------------------------------ #
+		# returns the largest number in @values      #
+		##############################################
+		my $max = shift;
+		foreach (@_) {
+			$max = $_ if $_ > $max;
+		}
+		return $max;
+	},
+	'$diff' => sub {
+		##############################################
+		# diff( @values )                            #
+		# ========================================== #
+		# @values - a list of numerical values       #
+		# ------------------------------------------ #
+		# returns the difference between the values  #
+		##############################################
+		my $diff = shift;
+		foreach (@_) {
+			$diff -= $_;
+		}
+		return $diff;
+	},
+	'$sum' => sub {
+		##############################################
+		# sum( @values )                             #
+		# ========================================== #
+		# @values - a list of numerical values       #
+		# ------------------------------------------ #
+		# returns the summation of the values        #
+		##############################################
+		my $sum = shift;
+		foreach (@_) {
+			$sum += $_;
+		}
+		return $sum;
+	},
+	'$product' => sub {
+		##############################################
+		# product( @values )                         #
+		# ========================================== #
+		# @values - a list of numerical values       #
+		# ------------------------------------------ #
+		# returns the product of the values          #
+		##############################################
+		my $prod = shift;
+		foreach (@_) {
+			$prod *= $_;
+		}
+		return $prod;
+	},
+	'$div' => sub {
+		##############################################
+		# div( @values )                             #
+		# ========================================== #
+		# @values - a list of numerical values       #
+		# ------------------------------------------ #
+		# returns the division of the values.        #
+		# if the function encounters zero anywhere   #
+		# after the first value, it will immediately #
+		# return zero instead of raise an error.     #
+		##############################################
+		my $div = shift;
+		foreach (@_) {
+			return 0 if $_ == 0;
+			$div /= $_;
+		}
+		return $div;
+	}
+);
+
 =head1 INTERFACE
 
-=head2 doc_matches( \%document, [ \%query ] )
+=head2 doc_matches( \%document, [ \%query, \@defs ] )
 
 Receives a document hash-ref and possibly a query hash-ref, and returns
 true if the document matches the query, false otherwise. If no query
@@ -108,17 +217,39 @@ document will match an empty query - in accordance with MongoDB).
 See L<MQUL::Reference/"QUERY STRUCTURE"> to learn about the structure of
 query hash-refs.
 
+Optionally, an even-numbered array reference of dynamically calculated
+attribute definitions can be provided. For example:
+
+	[ min_val => { '$min' => ['attr1', 'attr2', 'attr3' ] },
+	  max_val => { '$max' => ['attr1', 'attr2', 'attr3' ] },
+	  difference => { '$diff' => ['max_val', 'min_val'] } ]
+
+This defines three dynamic attributes: C<min_val>, C<max_val> and
+C<difference>, which is made up of the first two.
+
+See L<MQUL::Reference/"DYNAMICALLY CALCULATED ATTRIBUTES"> for more information
+about dynamic attributes.
+
 =cut
 
 sub doc_matches {
-	my ($doc, $query) = @_;
+	my ($doc, $query, $defs) = @_;
 
-	croak "MQUL::doc_matches() requires a document hash-ref."
+	croak 'MQUL::doc_matches() requires a document hash-ref.'
 		unless $doc && ref $doc && ref $doc eq 'HASH';
-	croak "MQUL::doc_matches() expects a query hash-ref."
-		if $query && (!ref $query || (ref $query && ref $query ne 'HASH'));
+	croak 'MQUL::doc_matches() expects a query hash-ref.'
+		if $query && (!ref $query || ref $query ne 'HASH');
+	croak 'MQUL::doc_matches() expects an even-numbered definitions array-ref.'
+		if $defs && (!ref $defs || ref $defs ne 'ARRAY' || scalar @$defs % 2 != 0);
 
 	$query ||= {};
+
+	if ($defs) {
+		for (my $i = 0; $i < scalar(@$defs) - 1; $i = $i + 2) {
+			my ($name, $def) = ($defs->[$i], $defs->[$i+1]);
+			$doc->{$name} = _parse_function($doc, $def);
+		}
+	}
 
 	# go over each key of the query
 	foreach my $key (keys %$query) {
@@ -163,14 +294,13 @@ sub doc_matches {
 # provided document.                         #
 ##############################################
 
+my $funcs = join('|', keys %BUILTINS);
+
 sub _attribute_matches {
 	my ($doc, $key, $value) = @_;
 
 	my %virt;
-	if ($key =~ m/^(abs|min|max)\(([^)]+)\)$/) {
-		# support for virtual functions
-		$virt{$key} = _parse_function($doc, $key);
-	} elsif ($key =~ m/\./) {
+	if ($key =~ m/\./) {
 		# support for the dot notation
 		my ($v, $k) = _expand_dot_notation($doc, $key);
 
@@ -608,38 +738,6 @@ sub _index_of {
 }
 
 ##############################################
-# _min( @values )                            #
-# ========================================== #
-# @values - a list of numerical values       #
-# ------------------------------------------ #
-# returns the smallest number in @values     #
-##############################################
-
-sub _min {
-	my $min = shift;
-	foreach (@_) {
-		$min = $_ if $_ < $min;
-	}
-	return $min;
-}
-
-##############################################
-# _max( @values )                            #
-# ========================================== #
-# @values - a list of numerical values       #
-# ------------------------------------------ #
-# returns the largest number in @values      #
-##############################################
-
-sub _max {
-	my $max = shift;
-	foreach (@_) {
-		$max = $_ if $_ > $max;
-	}
-	return $max;
-}
-
-##############################################
 # _parse_function( $doc, $key )              #
 # ========================================== #
 # $doc - the document                        #
@@ -652,24 +750,24 @@ sub _max {
 ##############################################
 
 sub _parse_function {
-	my ($doc, $key) = @_;
+	my ($doc, $def) = @_;
 
-	my ($func, @attrs) = ($1, split(/,\s*/, $2));
+	my ($func) = keys %$def;
+
+	die "Unrecognized function $func"
+		unless exists $BUILTINS{$func};
+
+	$def->{$func} = [$def->{$func}]
+		unless ref $def->{$func};
 
 	my @vals;
-	foreach (@attrs) {
+	foreach (@{$def->{$func}}) {
 		my ($v, $k) = _expand_dot_notation($doc, $_);
 		push(@vals, $v)
 			if defined $v;
 	}
 
-	if ($func eq 'abs') {
-		return abs shift @vals;
-	} elsif ($func eq 'min') {
-		return &_min(@vals);
-	} else {
-		return &_max(@vals);
-	}
+	return $BUILTINS{$func}->(@vals);
 }
 
 ##############################################

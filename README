@@ -64,6 +64,12 @@ DESCRIPTION
     above a certain threshold and stuff like that). It is also used by
     MorboDB, an in-memory clone of MongoDB.
 
+  UPGRADE NOTES
+    My distributions follow the semantic versioning scheme
+    <http://semver.org/>, so whenever the major version changes, that means
+    that API changes incompatible with previous versions have been made.
+    Always read the Changes file before upgrading.
+
   THE LANGUAGE
     The language itself is described in MQUL::Reference. This document only
     describes the interface of this module.
@@ -72,7 +78,7 @@ DESCRIPTION
     original MongoDB language.
 
 INTERFACE
-  doc_matches( \%document, [ \%query ] )
+  doc_matches( \%document, [ \%query, \@defs ] )
     Receives a document hash-ref and possibly a query hash-ref, and returns
     true if the document matches the query, false otherwise. If no query is
     given (or an empty hash-ref is given), true will be returned (every
@@ -80,6 +86,19 @@ INTERFACE
 
     See "QUERY STRUCTURE" in MQUL::Reference to learn about the structure of
     query hash-refs.
+
+    Optionally, an even-numbered array reference of dynamically calculated
+    attribute definitions can be provided. For example:
+
+            [ min_val => { '$min' => ['attr1', 'attr2', 'attr3' ] },
+              max_val => { '$max' => ['attr1', 'attr2', 'attr3' ] },
+              difference => { '$diff' => ['max_val', 'min_val'] } ]
+
+    This defines three dynamic attributes: "min_val", "max_val" and
+    "difference", which is made up of the first two.
+
+    See "DYNAMICALLY CALCULATED ATTRIBUTES" in MQUL::Reference for more
+    information about dynamic attributes.
 
   update_doc( \%document, \%update )
     Receives a document hash-ref and an update hash-ref, and updates the

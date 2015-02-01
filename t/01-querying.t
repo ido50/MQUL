@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-use Test::More tests => 92;
+use Test::More tests => 98;
 use MQUL qw/doc_matches/;
 use Try::Tiny;
 
@@ -191,10 +191,109 @@ ok(doc_matches({
 }), 'or #9 works');
 
 # let's try some functions
-ok(doc_matches({ one => 1, two => 2, three => 3 }, { 'min(one, two, three)' => 1 }), 'min() seems to work with simple equality');
-ok(doc_matches({ one => 1, two => 2, three => 3 }, { 'max(one, two, three)' => 3 }), 'max() seems to work with simple equality');
-ok(doc_matches({ one => 1, two => 2, three => 3 }, { 'max(one, two, three)' => { '$gt' => 2, '$lt' => 4 } }), 'max() seems to work with complex ranging');
-ok(doc_matches({ some_value => -5.94 }, { 'abs(some_value)' => { '$gte' => 5, '$lte' => 6 } }), 'abs() seems to work');
+ok(
+	doc_matches(
+		{ one => 1, two => 2, three => 3 },
+		{ min => 1 },
+		[ min => { '$min' => ['one', 'two', 'three'] } ]
+	),
+	'$min works with simple equality'
+);
+
+ok(
+	doc_matches(
+		{ one => 1, two => 2, three => 3 },
+		{ max => 3 },
+		[ max => { '$max' => ['one', 'two', 'three'] } ]
+	),
+	'$max works with simple equality'
+);
+
+ok(
+	doc_matches(
+		{ one => 1, two => 2, three => 3 },
+		{ max => { '$gt' => 2, '$lt' => 4 } },
+		[ max => { '$max' => ['one', 'two', 'three'] } ]
+	),
+	'$max works with complex ranging'
+);
+
+ok(
+	doc_matches(
+		{ some_value => -5.94 },
+		{ 'abs(some_value)' => { '$gte' => 5, '$lte' => 6 } },
+		[ 'abs(some_value)' => { '$abs' => 'some_value' } ]
+	),
+	'$abs works'
+);
+
+ok(
+	doc_matches(
+		{ two => 2, four => 4, eight => 8 },
+		{ product => 64 },
+		[ product => { '$product' => [qw/two four eight/] } ]
+	),
+	'product() works'
+);
+
+ok(
+	doc_matches(
+		{ four => 4, two => 2 },
+		{ div => 2 },
+		[ div => { '$div' => ['four', 'two'] } ]
+	),
+	'div() works'
+);
+
+ok(
+	doc_matches(
+		{ four => 4, zero => 0, three => 3 },
+		{ div => 0 },
+		[ div => { '$div' => ['four', 'zero', 'three'] } ]
+	),
+	'div() by zero returns zero'
+);
+
+ok(
+	doc_matches(
+		{ four => 4, zero => 0, three => 3 },
+		{ sum => 7 },
+		[ sum => { '$sum' => ['four', 'zero', 'three'] } ]
+	),
+	'sum() works'
+);
+
+ok(
+	doc_matches(
+		{ four => 4, grand => 1000, mfour => -4 },
+		{ diff => -992 },
+		[ diff => { '$diff' => [qw/four grand mfour/] } ]
+	),
+	'diff() works'
+);
+
+# let's try function nesting
+ok(
+	doc_matches(
+		{ one => 1, two => 2, three => 3 },
+		{ sum => 4 },
+		[ min => { '$min' => ['one', 'two', 'three'] },
+		  max => { '$max' => ['one', 'two', 'three'] },
+		  sum => { '$sum' => ['min', 'max'] } ]
+	),
+	'nested function #1 works'
+);
+
+ok(
+	doc_matches(
+		{ ten => 10, nine => 9, three => 3, four => 4 },
+		{ abs => 20 },
+		[ diff1 => { '$diff' => ['three', 'four'] },
+		  diff2 => { '$diff' => ['diff1', 'ten', 'nine'] },
+		  abs => { '$abs' => 'diff2' } ]
+	),
+	'nested function #2 works'
+);
 
 # let's check the dot notation
 ok(
@@ -289,7 +388,8 @@ ok(
 ok(
 	doc_matches(
 		{ one => { value => -3.5 } },
-		{ 'abs(one.value)' => 3.5 }
+		{ abs => 3.5 },
+		[ abs => { '$abs' => 'one.value' } ]
 	),
 	'dot notation works with simple abs()'
 );
@@ -297,7 +397,8 @@ ok(
 ok(
 	doc_matches(
 		{ one => { value => 3.25 }, two => { value => 5.75 } },
-		{ 'max(one.value, two.value)' => 5.75 }
+		{ max => 5.75 },
+		[ max => { '$max' => ['one.value', 'two.value'] } ]
 	),
 	'dot notation works with max() #1'
 );
@@ -305,7 +406,8 @@ ok(
 ok(
 	!doc_matches(
 		{ one => { value => 3.25 }, two => { value => 5.75 } },
-		{ 'max(one.value, two.value)' => 3.25 }
+		{ max => 3.25 },
+		[ max => { '$max' => ['one.value', 'two.value'] } ]
 	),
 	'dot notation works with max() #2'
 );
@@ -313,7 +415,8 @@ ok(
 ok(
 	doc_matches(
 		{ one => { array => [{ value => 1 }] }, two => { array => [{ value => 2 }] } },
-		{ 'min(one.array.0.value, two.array.0.value)' => { '$gte' => 1, '$lt' => 2 } }
+		{ min => { '$gte' => 1, '$lt' => 2 } },
+		[ min => { '$min' => ['one.array.0.value', 'two.array.0.value'] } ]
 	),
 	'dot notation works with functions and arrays #1'
 );
@@ -321,7 +424,8 @@ ok(
 ok(
 	!doc_matches(
 		{ one => { array => [{ value => 1 }] }, two => { array => [{ value => 2 }] } },
-		{ 'min(one.array.0.value, two.array.0.value)' => { '$gt' => 1, '$lt' => 2 } }
+		{ min => { '$gt' => 1, '$lt' => 2 } },
+		[ min => { '$min' => ['one.array.0.value', 'two.array.0.value'] } ]
 	),
 	'dot notation works with functions and arrays #2'
 );
@@ -350,22 +454,8 @@ ok(
 			},
 			array_of_numbers => [80, 90]
 		},
-		{ 'max(array_of_numbers.1, numbers.three)' => { '$gt' => 90 } }
-	),
-	'max with dot notation from different fields works'
-);
-
-ok(
-	!doc_matches(
-		{
-			numbers => {
-				one => 35,
-				two => -65,
-				three => 100
-			},
-			array_of_numbers => [80, 90]
-		},
-		{ 'max(array_of_numbers.1, numbers.three)' => 90 }
+		{ max => { '$gt' => 90 } },
+		[ max => { '$max' => ['array_of_numbers.1', 'numbers.three'] } ]
 	),
 	'max with dot notation from different fields works'
 );

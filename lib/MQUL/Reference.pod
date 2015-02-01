@@ -339,8 +339,10 @@ All of these queries will return true:
 
 =head2 DYNAMICALLY CALCULATED ATTRIBUTES
 
-Since version 0.004, C<MQUL> can dynamically calculate "fake attributes", such
-as the minimum of a list of attributes, and query on these as if they were true
+I<Note: Dynamic attributes have changed in version 2.0.0>.
+
+Since version 0.4.0, C<MQUL> can dynamically calculate "virtual attributes", such
+as the minimum of a list of "real" attributes, and query on these as if they were true
 attributes of the document.
 
 For example, consider the following document:
@@ -351,39 +353,124 @@ For example, consider the following document:
 		three => 3
 	}
 
-The C<min()> and C<max()> "functions" can be used to query on the minimum and
+The C<$min> and C<$max> "functions" can be used to query on the minimum and
 maximum of these attributes, respectively:
 
-	$query = { 'min(one, two, three)' => 1 }	# true
-	$query = { 'max(one, two, three)' => 3 }	# true
-	$query = { 'min(one, two, three)' => 2 }	# false
+	# true
+	doc_matches(
+		$document,
+		{ min => 1 },
+		[ min => { '$min' => ['one', 'two', 'three'] } ]
+	);
 
-Apart from C<min()> and C<max()>, the C<abs()> function can be used to query
-on the absolute value of an attribute. For example:
+	# true
+	doc_matches(
+		$document,
+		{ max => 3 },
+		[ max => { '$max' => ['one', 'two', 'three'] } ]
+	);
 
-	$document = {
-		some_number => -4.3,
-		other_number => 0
-	}
+	# false
+	doc_matches(
+		$document,
+		{ min => { '$gt' => 2 } },
+		[ min => { '$min' => ['one', 'two', 'three'] } ]
+	);
 
-	$query = { 'abs(some_number)' => { '$gt' => 0 } }		# true
-	$query = { 'abs(some_number)' => -4.3 }			# false
+You will notice that we are providing a third parameter to C<doc_matches()>,
+an array reference that defines the dynamic attributes and how they are
+calculated.
 
-These functions also support the dot notation, so the following document will
-match all of the listed queries:
+You can define as many dynamic attributes as you like. They will be calculated
+in order, so you can define a dynamic attribute, and then build another one
+from it later on:
 
-	$document = {
-		numbers => {
-			one => 35,
-			two => -65,
-			three => 100
+	doc_matches(
+		{ mfive => -5, three => 3 },
+		[ mtwo => { '$diff' => ['three', 'mfive'] },
+		  two => { '$abs' => 'mtwo' } ]
+	);
+
+In the above example, C<mtwo> is created with C<$diff> from the C<three> and
+C<mfive> attributes, yielding a value of C<-2>. Then, the C<two> attribute
+is created from C<mtwo> by using C<$abs>, thus yielding C<2>.
+
+Currently, all functions are numerical. They all take a list of attributes
+(except C<$abs>, which only takes one attribute). The following functions
+are supported:
+
+=over
+
+=item * B<$min> - returns the minimum of the list
+
+	$document = { one => 1, four => 4 }
+
+	{ '$min' => ['one', 'four'] }   # min(1, 4) = 1
+
+=item * B<$max> - returns the maximum of the list
+
+	$document = { one => 1, four => 4 }
+
+	{ '$max' => ['one', 'four'] }   # max(1, 4) = 4
+
+=item * B<$abs> - returns the absolute value of an attribute
+
+	$document = { mtwo => -2 }
+
+	{ '$abs' => 'mtwo' }	# abs(-2) = 2
+
+=item * B<$sum> - returns the sum of the list
+
+	$document = { one => 1, four => 4, mtwo => -2 }
+
+	{ '$sum' => ['one', 'four', 'mtwo'] }	# 1 + 4 + (-2) = 3
+
+=item * B<$diff> - returns the difference between the first item in the list and all the rest
+
+	$document = { one => 1, four => 4, mtwo => -2 }
+
+	{ '$diff' => ['one', 'four', 'mtwo'] }	# 1 - 4 - (-2) = -1
+
+=item * B<$product> - returns the product of all the attributes in the list
+
+	$document = { two => 2, three => 3, four => 4 }
+
+	{ '$product' => ['two', 'three', 'four'] }	# 2*3*4 = 24
+
+=item * B<$div> - returns the successive division of the list
+
+	$document = { eight => 8, four => 4, two => 2 }
+
+	{ '$div' => ['eight', 'four', 'two'] }	# (8/4)/2 = 1
+
+Note that if C<$div> encounters a zero value anywhere after the first item of
+the list, it will immediately return zero instead of throw an error.
+
+=back
+
+The functions also support the dot notation, so the following will return true:
+
+	doc_matches(
+		# the document
+		{
+			numbers => {
+				one => 35,
+				two => -65,
+				three => 100
+			},
+			array => [50, -50]
 		},
-		array_of_numbers => [80, 90]
-	}
-
-	$query = { 'min(numbers.one, numbers.two, numbers.three')' => -65 }
-	$query = { 'abs(numbers.two)' => 65 }
-	$query = { 'max(array_of_numbers.1, numbers.three)' => { '$gt' => 90 } }
+		# the query
+		{
+			'min(numbers)' => -65,
+			'sum(array)' => 0
+		},
+		# dynamic definitions
+		[
+			'min(numbers)' => { '$min' => ['numbers.one', 'numbers.two', 'numbers.three'] },
+			'sum(array)'   => { '$sum' => ['array.0', 'array.1'] }
+		]
+	);
 
 =head1 UPDATE STRUCTURES
 

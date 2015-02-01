@@ -1,6 +1,8 @@
 Revision history for MQUL
 
 {{$NEXT}}
+
+2.000000  2015-02-02 00:45:54+02:00 Asia/Jerusalem
 		- Changed the way dynamically calculated attributes work, now they
 		  are defined in a third parameter to doc_matches(), which allows
 		  for greater flexibility, and also calculating attributes from other

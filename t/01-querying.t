@@ -306,12 +306,12 @@ ok(
 );
 
 ok(
-	!doc_matches(
+	doc_matches(
 		{},
-		{ min => 3 },
+		{ min => { '$type' => 'null' } },
 		[ min => { '$min' => [qw/one two three/] } ]
 	),
-	'min() on non-existing values does not croak'
+	'min() on non-existing values does not croak but returns null'
 );
 
 # let's check the dot notation

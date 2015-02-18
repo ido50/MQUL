@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-use Test::More tests => 98;
+use Test::More tests => 100;
 use MQUL qw/doc_matches/;
 use Try::Tiny;
 
@@ -293,6 +293,25 @@ ok(
 		  abs => { '$abs' => 'diff2' } ]
 	),
 	'nested function #2 works'
+);
+
+# what if we're running a function on non-existing values?
+ok(
+	!doc_matches(
+		{},
+		{ abs => 20 },
+		[ abs => { '$abs' => 'something' } ]
+	),
+	'abs() on a non-existing value does not croak'
+);
+
+ok(
+	!doc_matches(
+		{},
+		{ min => 3 },
+		[ min => { '$min' => [qw/one two three/] } ]
+	),
+	'min() on non-existing values does not croak'
 );
 
 # let's check the dot notation

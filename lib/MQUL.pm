@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "2.000000";
+our $VERSION = "2.000001";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -766,6 +766,8 @@ sub _parse_function {
 		push(@vals, $v)
 			if defined $v;
 	}
+
+	return unless scalar @vals;
 
 	return $BUILTINS{$func}->(@vals);
 }

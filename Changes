@@ -1,6 +1,8 @@
 Revision history for MQUL
 
 {{$NEXT}}
+
+2.000001  2015-02-19 00:36:41+02:00 Asia/Jerusalem
 		- Bugfix: functions generating dynamic attributes are only called if
 		  there are actually any values to call them on. If there aren't any,
 		  the dynamically calculated attribute will hold an undefined value.

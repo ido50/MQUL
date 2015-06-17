@@ -16,7 +16,7 @@ use DateTime::Format::W3CDTF;
 use Scalar::Util qw/blessed/;
 use Try::Tiny;
 
-our $VERSION = "2.000001";
+our $VERSION = "2.001000";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -273,6 +273,10 @@ sub doc_matches {
 				}
 			}
 			return unless $found;
+		} elsif ($key eq '$and' && ref $value eq 'ARRAY') {
+			foreach (@$value) {
+				return unless &doc_matches($doc, $_, $defs);
+			}
 		} else {
 			return unless &_attribute_matches($doc, $key, $value);
 		}

@@ -313,6 +313,29 @@ can be used for more complex constraints, such as this:
 		],
 	}
 
+=head2 AND QUERIES
+
+Sometimes you need to run more complex queries that are difficult or even impossible
+to run with a basic query hash-ref. Or you might just want to be more verbose when
+creating your queries. Much like the C<$or> keyword, the C<$and> keyword can be used
+with an array-ref of queries that must all match:
+
+	$query = {
+		'$and' => [
+			{ title => 'Freaks and Geeks' },
+			{ imdb_score => { '$gt' => 7 }
+		]
+	}
+
+A good usage for the C<$and> keyword is to match several C<$or> queries:
+
+	$query = {
+		'$and' => [
+			{ '$or' => [ ... ] },
+			{ '$or' => [ ... ] }
+		]
+	}
+
 =head2 THE DOT NOTATION
 
 Since version 1.0.0, C<MQUL> supports the dot notation for querying against

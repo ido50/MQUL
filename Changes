@@ -1,6 +1,7 @@
 Revision history for MQUL
 
 {{$NEXT}}
+		- Feature: added support for the $and keyword in queries
 
 2.000001  2015-02-19 00:36:41+02:00 Asia/Jerusalem
 		- Bugfix: functions generating dynamic attributes are only called if

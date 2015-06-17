@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-use Test::More tests => 100;
+use Test::More tests => 103;
 use MQUL qw/doc_matches/;
 use Try::Tiny;
 
@@ -189,6 +189,28 @@ ok(doc_matches({
 		},
 	],
 }), 'or #9 works');
+
+# let's try some $and queries
+ok(doc_matches({ a => 5, b => 5 }, { 
+	'$and' => [
+		{ '$or' => [{ a => 5 }, { b => 10 }] }, 
+		{ '$or' => [{ a => 1 }, { b => 5  }] }
+	]
+}), 'checking $and query #1');
+
+ok(doc_matches({ a => 1, b => 2 }, { 
+	'$and' => [
+		{ a => { '$lt' => 2 } },
+		{ b => { '$gt' => 1 } }
+	]
+}), 'checking $and query #2');
+
+ok(!doc_matches({ a => 1, b => 2 }, {
+	'$and' => [
+		{ a => 1 },
+		{ b => 1 }
+	]
+}), 'checking $and query #3');
 
 # let's try some functions
 ok(

@@ -1,3 +1,4 @@
+.vscode
 blib/*
 inc/*
 Makefile
